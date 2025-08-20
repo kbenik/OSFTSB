@@ -83,14 +83,14 @@ async function logoutUser() {
     const { error } = await supabase.auth.signOut();
     if (error) {
         console.error('Error logging out:', error);
-        return alert('Could not log out. Please try again.');
+        alert('Could not log out. Please try again.');
     }
-    currentUser = null;
-    handleUserLoggedOut();
+    // The onAuthStateChange listener will reliably handle the UI update.
 }
 
 supabase.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_IN') {
+    // This function now reliably handles all state changes
+    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
         currentUser = session.user;
         await handleUserLoggedIn();
     } else if (event === 'SIGNED_OUT') {
@@ -113,14 +113,30 @@ function handleUserLoggedOut() {
 function updateUserStatusUI() {
     if (currentUser) {
         const username = currentUser.user_metadata.username || currentUser.email;
-        userStatusDiv.innerHTML = `<span>Welcome, ${username}</span><button id="logout-btn">Logout</button>`;
+        userStatusDiv.innerHTML = `
+            <span>Welcome, ${username}</span>
+            <button id="logout-btn">Logout</button>
+        `;
         mainNav.classList.remove('hidden');
-        document.getElementById('logout-btn').addEventListener('click', logoutUser);
     } else {
         userStatusDiv.innerHTML = `<a href="#auth" class="nav-link">Login / Sign Up</a>`;
         mainNav.classList.add('hidden');
     }
 }
+
+// --- NEW: ROBUST EVENT LISTENER FOR USER ACTIONS ---
+// This single listener on the parent div handles clicks for login or logout.
+userStatusDiv.addEventListener('click', (e) => {
+    // Check if the logout button was clicked
+    if (e.target.id === 'logout-btn') {
+        logoutUser();
+    }
+    // Check if the login link was clicked
+    if (e.target.closest('.nav-link')) {
+        showPage('auth-page');
+    }
+});
+
 
 // =================================================================
 // DASHBOARD & DATA FETCHING
@@ -243,23 +259,15 @@ function addGameCardEventListeners() {
                 userPicks[gameId] = team.classList.contains('selected') ? team.dataset.teamName : undefined;
             });
         });
-
-        // --- UPDATED: Double Up Logic ---
         card.querySelector('.double-up-btn').addEventListener('click', (e) => {
             const clickedButton = e.currentTarget;
             const wasAlreadySelected = clickedButton.classList.contains('selected');
-
-            // First, clear any and all existing double up selections from the UI.
             document.querySelectorAll('.double-up-btn.selected').forEach(btn => {
                 btn.classList.remove('selected');
             });
-
-            // Now, decide the new state.
             if (wasAlreadySelected) {
-                // If the user clicked the button that was already selected, it's a toggle OFF.
                 doubleUpPick = null;
             } else {
-                // If the user clicked a new button, it's a toggle ON for that button.
                 clickedButton.classList.add('selected');
                 doubleUpPick = gameId;
             }
@@ -280,7 +288,6 @@ savePicksBtn.addEventListener('click', async () => {
         user_id: currentUser.id,
         game_id: parseInt(gameId),
         picked_team: userPicks[gameId],
-        // --- FIXED: Typo `is__double_up` changed to `is_double_up` ---
         is_double_up: gameId === doubleUpPick,
         week: activeWeek
     }));
@@ -301,11 +308,10 @@ savePicksBtn.addEventListener('click', async () => {
 async function init() {
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
+    
+    // Let onAuthStateChange handle the initial user check and UI rendering
     const { data: { session } } = await supabase.auth.getSession();
-    currentUser = session?.user || null;
-    if (currentUser) {
-        await handleUserLoggedIn();
-    } else {
+    if (!session) {
         handleUserLoggedOut();
     }
 }
