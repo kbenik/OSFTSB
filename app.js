@@ -11,6 +11,7 @@ const supabase = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // --- GOOGLE SHEET DATA ---
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
+
 let activeWeek = '';
 let allGames = [];
 let userPicks = {};
@@ -32,50 +33,29 @@ const logo = document.getElementById('logo');
 const navContainer = document.querySelector('nav.container');
 
 // =================================================================
-// --- UPDATED: Smarter Date & Time Logic ---
+// DATE & TIME LOGIC
 // =================================================================
 
 function getKickoffTimeAsDate(game) {
+    if (!game || !game.Date || !game.Time) return null;
     const dateStr = game.Date.split(' ')[1];
     const timeStr = game.Time;
     const dateTimeString = `${dateStr} ${timeStr} EST`;
     return new Date(dateTimeString);
 }
 
-/**
- * Scans all games to determine the current REGULAR SEASON week for picking.
- * It ignores pre-season and finds the first regular season week with upcoming games.
- * @param {Array<object>} games - The array of all games.
- * @returns {string} The name of the current week (e.g., "Week 1").
- */
 function determineCurrentWeek(games) {
     const now = new Date();
-
-    // 1. Filter for REGULAR SEASON games only.
-    const regularSeasonGames = games.filter(game => game.Week.startsWith('Week '));
-
-    if (regularSeasonGames.length === 0) {
-        return "No Regular Season Games Found";
-    }
-
-    // 2. Sort these games chronologically.
+    const regularSeasonGames = games.filter(game => game.Week && game.Week.startsWith('Week '));
+    if (regularSeasonGames.length === 0) return "No Regular Season Games Found";
     const sortedGames = [...regularSeasonGames].sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
-
-    // 3. Find the first regular season game whose kickoff time is in the future.
     const upcomingGame = sortedGames.find(game => getKickoffTimeAsDate(game) > now);
-
-    if (upcomingGame) {
-        // If we found an upcoming game, that's our active week.
-        return upcomingGame.Week;
-    } else {
-        // If all regular season games are in the past, default to the last one.
-        return sortedGames[sortedGames.length - 1].Week;
-    }
+    if (upcomingGame) return upcomingGame.Week;
+    return sortedGames[sortedGames.length - 1].Week;
 }
 
-
 // =================================================================
-// AUTHENTICATION (No changes in this section)
+// AUTHENTICATION
 // =================================================================
 
 signUpForm.addEventListener('submit', async (e) => {
@@ -127,10 +107,7 @@ function handleUserLoggedOut() {
 function updateUserStatusUI() {
     if (currentUser) {
         const username = currentUser.user_metadata.username || currentUser.email;
-        userStatusDiv.innerHTML = `
-            <span>Welcome, ${username}</span>
-            <button id="logout-btn">Logout</button>
-        `;
+        userStatusDiv.innerHTML = `<span>Welcome, ${username}</span><button id="logout-btn">Logout</button>`;
         mainNav.classList.remove('hidden');
         document.getElementById('logout-btn').addEventListener('click', logoutUser);
     } else {
@@ -140,7 +117,7 @@ function updateUserStatusUI() {
 }
 
 // =================================================================
-// DASHBOARD & DATA FETCHING (No changes in this section)
+// DASHBOARD & DATA FETCHING
 // =================================================================
 
 async function fetchDashboardData() {
@@ -164,12 +141,7 @@ function renderDashboard(profile, picks) {
         const result = pick.is_correct === null ? 'Pending' : (pick.is_correct ? 'Correct' : 'Incorrect');
         const points = 'TBD';
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${gameName} (${pick.week})</td>
-            <td>${pick.picked_team} ${pick.is_double_up ? '<strong>(2x)</strong>' : ''}</td>
-            <td>${result}</td>
-            <td>${points}</td>
-        `;
+        row.innerHTML = `<td>${gameName} (${pick.week})</td><td>${pick.picked_team} ${pick.is_double_up ? '<strong>(2x)</strong>' : ''}</td><td>${result}</td><td>${points}</td>`;
         historyBody.appendChild(row);
     });
 }
@@ -178,13 +150,22 @@ function renderDashboard(profile, picks) {
 // PAGE NAVIGATION & PICKS LOGIC
 // =================================================================
 
+// --- UPDATED: showPage function ---
 function showPage(pageId) {
     if (pageId !== 'auth-page' && !currentUser) {
         showPage('auth-page');
         return;
     }
     pages.forEach(page => page.classList.remove('active'));
-    document.getElementById(pageId)?.classList.add('active');
+    const activePage = document.getElementById(pageId);
+    if (activePage) {
+        activePage.classList.add('active');
+    }
+
+    // --- CHANGE #2: Render games ONLY when the picks page is shown ---
+    if (pageId === 'picks-page') {
+        renderGames();
+    }
 }
 
 navContainer.addEventListener('click', (e) => {
@@ -207,21 +188,24 @@ async function fetchGameData() {
         const response = await fetch(SHEET_URL);
         if (!response.ok) throw new Error('Network response was not ok');
         const csvText = await response.text();
-        allGames = parseGameData(csvText);
+        allGames = parseCSV(csvText); // Using a robust parser
     } catch (error) {
         console.error('Failed to fetch game data:', error);
-        gamesContainer.innerHTML = '<p>Error: Could not load game data.</p>';
+        gamesContainer.innerHTML = '<p>Error: Could not load game data. Check console for details.</p>';
     }
 }
 
-function parseGameData(csvText) {
+function parseCSV(csvText) {
     const lines = csvText.trim().split('\n');
-    const headers = lines[0].split(',');
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim());
     return lines.slice(1).map(line => {
-        const values = line.split(',');
+        const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
         const game = {};
         headers.forEach((header, index) => {
-            game[header.trim()] = values[index]?.trim().replace(/^"|"$/g, '') || '';
+            let value = values[index] || '';
+            value = value.replace(/^"|"$/g, '').trim();
+            game[header] = value;
         });
         return game;
     });
@@ -242,13 +226,7 @@ function renderGames() {
         gameCard.dataset.gameId = game['Game Id'];
         const kickoffTime = getKickoffTimeAsDate(game);
         if (kickoffTime < now) gameCard.classList.add('locked');
-        gameCard.innerHTML = `
-            <div class="team" data-team-name="${game['Away Display Name']}"><img src="${game['Away Logo']}" alt="${game['Away Display Name']}"><span class="team-name">${game['Away Display Name']}</span></div>
-            <div class="game-separator">@</div>
-            <div class="team" data-team-name="${game['Home Display Name']}"><img src="${game['Home Logo']}" alt="${game['Home Display Name']}"><span class="team-name">${game['Home Display Name']}</span></div>
-            <div class="game-info">${kickoffTime.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
-            <div class="double-up-container"><button class="double-up-btn">Double Up</button></div>
-        `;
+        gameCard.innerHTML = `<div class="team" data-team-name="${game['Away Display Name']}"><img src="${game['Away Logo']}" alt="${game['Away Display Name']}"><span class="team-name">${game['Away Display Name']}</span></div><div class="game-separator">@</div><div class="team" data-team-name="${game['Home Display Name']}"><img src="${game['Home Logo']}" alt="${game['Home Display Name']}"><span class="team-name">${game['Home Display Name']}</span></div><div class="game-info">${kickoffTime.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div><div class="double-up-container"><button class="double-up-btn">Double Up</button></div>`;
         gamesContainer.appendChild(gameCard);
     });
     addGameCardEventListeners();
@@ -267,14 +245,8 @@ function addGameCardEventListeners() {
         });
         card.querySelector('.double-up-btn').addEventListener('click', (e) => {
             const btn = e.currentTarget;
-            if (btn.classList.contains('selected')) {
-                btn.classList.remove('selected');
-                doubleUpPick = null;
-            } else {
-                document.querySelectorAll('.double-up-btn').forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
-                doubleUpPick = gameId;
-            }
+            if (btn.classList.contains('selected')) { btn.classList.remove('selected'); doubleUpPick = null; } 
+            else { document.querySelectorAll('.double-up-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); doubleUpPick = gameId; }
         });
     });
 }
@@ -285,26 +257,14 @@ savePicksBtn.addEventListener('click', async () => {
     for (const gameId in userPicks) {
         if (userPicks[gameId]) {
             const game = allGames.find(g => g['Game Id'] == gameId);
-            if (getKickoffTimeAsDate(game) < now) {
-                return alert(`Too late! The ${game['Away Display Name']} @ ${game['Home Display Name']} game has already started and is locked.`);
-            }
+            if (getKickoffTimeAsDate(game) < now) { return alert(`Too late! The ${game['Away Display Name']} @ ${game['Home Display Name']} game has already started and is locked.`); }
         }
     }
-    const picksToInsert = Object.keys(userPicks).filter(gameId => userPicks[gameId]).map(gameId => ({
-        user_id: currentUser.id,
-        game_id: parseInt(gameId),
-        picked_team: userPicks[gameId],
-        is_double_up: gameId === doubleUpPick,
-        week: activeWeek
-    }));
+    const picksToInsert = Object.keys(userPicks).filter(gameId => userPicks[gameId]).map(gameId => ({ user_id: currentUser.id, game_id: parseInt(gameId), picked_team: userPicks[gameId], is__double_up: gameId === doubleUpPick, week: activeWeek }));
     if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
     const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
-    if (error) {
-        alert('Error saving picks: ' + error.message);
-    } else {
-        alert('Your picks have been saved!');
-        fetchDashboardData();
-    }
+    if (error) { alert('Error saving picks: ' + error.message); } 
+    else { alert('Your picks have been saved!'); fetchDashboardData(); }
 });
 
 // =================================================================
@@ -314,14 +274,18 @@ savePicksBtn.addEventListener('click', async () => {
 async function init() {
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
+    
     const { data: { session } } = await supabase.auth.getSession();
     currentUser = session?.user || null;
+    
     if (currentUser) {
         await handleUserLoggedIn();
     } else {
         handleUserLoggedOut();
     }
-    renderGames();
+    
+    // --- CHANGE #1: Do NOT render games on initial load ---
+    // renderGames(); // This line is now removed.
 }
 
 init();
