@@ -80,7 +80,17 @@ loginForm.addEventListener('submit', async (e) => {
 });
 
 async function logoutUser() {
-    await supabase.auth.signOut();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+        // If there was an error, show it and stop.
+        console.error('Error logging out:', error);
+        alert('Could not log out. Please try again.');
+        return;
+    }
+    
+    // Don't wait for the listener. Manually reset the app state now.
+    currentUser = null;
+    handleUserLoggedOut(); // This function already updates the UI and shows the auth page.
 }
 
 supabase.auth.onAuthStateChange(async (event, session) => {
