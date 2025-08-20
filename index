@@ -68,7 +68,7 @@
             font-weight: 500;
             padding: 5px 10px;
             border-radius: 5px;
-            transition: background-color 0.3s;
+            transition: background-color: 0.3s;
         }
 
         nav ul li a.active,
@@ -305,7 +305,7 @@
         <section id="picks-page" class="page">
             <h1 id="picks-page-title">Weekly Picks</h1>
             <div id="games-container">
-                <!-- Game cards will be populated by JavaScript -->
+                <p>Loading live game data...</p>
             </div>
             <button class="save-picks-btn">Save Picks</button>
         </section>
@@ -315,17 +315,12 @@
         document.addEventListener('DOMContentLoaded', function() {
             // --- CONFIGURATION ---
             const CURRENT_WEEK = 'Week 1'; // Change this to the current week you want to display
+            
+            // !!! IMPORTANT !!! 
+            // PASTE YOUR PUBLISHED GOOGLE SHEET URL HERE
+            const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv'; // Replace with your actual URL
 
-            // --- RAW DATA (Paste from your Google Sheet here) ---
-            const rawGameData = `
-Week	Date	Time	Away Team	Away	Home Team	Home	Away Score	Home Score	Qtr	Clock	Situation	Pos	Status	Score	Total Points	Game Id	O/U	Odds	Favored Team	Spread	Fav Covered	Box Score Home	Box Score Away	Home Display Name	Away Display Name	Game Winner	Game Loser	Over	Under	Away Logo	Home Logo
-Pre Week 1	Thu 08/07/2025	7:00 PM	Colts	IND	Ravens	BAL	16	24	F	0:00	game over		post	IND 16 BAL 24 (F)	40	401773001						14,7,0,3	6,3,7,0	Baltimore Ravens	Indianapolis Colts	Ravens	Colts	1	0	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/ind.png	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/bal.png
-Week 1	Thu 09/04/2025	8:20 PM	Cowboys	DAL	Eagles	PHI	0	0	pre	0:00	waiting...		pre	DAL 0 PHI 0 (pre)	0	401772510	46.5	PHI -7	PHI	-7				Philadelphia Eagles	Dallas Cowboys			0	0	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/dal.png	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/phi.png
-Week 1	Fri 09/05/2025	8:00 PM	Chiefs	KC	Chargers	LAC	0	0	pre	0:00	waiting...		pre	KC 0 LAC 0 (pre)	0	401772714	45.5	KC -3.5	KC	-3.5				Los Angeles Chargers	Kansas City Chiefs			0	0	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/kc.png	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/lac.png
-Week 1	Sun 09/07/2025	1:00 PM	Buccaneers	TB	Falcons	ATL	0	0	pre	0:00	waiting...		pre	TB 0 ATL 0 (pre)	0	401772830	48.5	TB -2	TB	-2				Atlanta Falcons	Tampa Bay Buccaneers			0	0	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/tb.png	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/atl.png
-Week 1	Sun 09/07/2025	1:00 PM	Bengals	CIN	Browns	CLE	0	0	pre	0:00	waiting...		pre	CIN 0 CLE 0 (pre)	0	401772829	46.5	CIN -5.5	CIN	-5.5				Cleveland Browns	Cincinnati Bengals			0	0	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/cin.png	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/cle.png
-Week 2	Thu 09/11/2025	8:15 PM	Commanders	WSH	Packers	GB	0	0	pre	0:00	waiting...		pre	WSH 0 GB 0 (pre)	0	401772936	48.5	GB -1.5	GB	-1.5				Green Bay Packers	Washington Commanders			0	0	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/wsh.png	https://a.espncdn.com/i/teamlogos/nfl/500/scoreboard/gb.png
-`;
+            let allGames = []; // This will hold all games fetched from the sheet
 
             const mockPickHistory = [
                 { game: 'IND @ BAL', pick: 'BAL', result: 'Correct', points: '+2 (2x)' },
@@ -334,21 +329,36 @@ Week 2	Thu 09/11/2025	8:15 PM	Commanders	WSH	Packers	GB	0	0	pre	0:00	waiting...	
             ];
 
             // --- DATA PARSING FUNCTION ---
-            function parseGameData(rawData) {
-                const lines = rawData.trim().split('\n');
-                const headers = lines[0].split('\t');
+            function parseGameData(csvText) {
+                const lines = csvText.trim().split('\n');
+                const headers = lines[0].split(',');
                 return lines.slice(1).map(line => {
-                    const values = line.split('\t');
+                    const values = line.split(',');
                     const game = {};
                     headers.forEach((header, index) => {
-                        game[header] = values[index];
+                        // Trim whitespace and remove quotes that CSV might add
+                        game[header.trim()] = values[index].trim().replace(/^"|"$/g, '');
                     });
                     return game;
                 });
             }
 
-            const allGames = parseGameData(rawGameData);
-            const weeklyGames = allGames.filter(game => game.Week === CURRENT_WEEK);
+            // --- LIVE DATA FETCHING ---
+            async function fetchGameData() {
+                try {
+                    const response = await fetch(SHEET_URL);
+                    if (!response.ok) {
+                        throw new Error(`Network response was not ok: ${response.statusText}`);
+                    }
+                    const csvText = await response.text();
+                    allGames = parseGameData(csvText);
+                    return allGames;
+                } catch (error) {
+                    console.error('Failed to fetch game data:', error);
+                    document.getElementById('games-container').innerHTML = '<p>Error: Could not load game data. Please check the SHEET_URL and make sure the sheet is published correctly.</p>';
+                    return []; // Return empty array on error
+                }
+            }
 
             // --- Page Navigation ---
             const navLinks = document.querySelectorAll('.nav-link');
@@ -397,13 +407,19 @@ Week 2	Thu 09/11/2025	8:15 PM	Commanders	WSH	Packers	GB	0	0	pre	0:00	waiting...	
             let doubleUpPick = null; // gameID
 
             function isGameLocked(game) {
-                // Lock the game if the status is not 'pre' (e.g., 'in', 'post', 'F')
                 return game.Status !== 'pre';
             }
 
             function renderGames() {
+                const weeklyGames = allGames.filter(game => game.Week === CURRENT_WEEK);
                 document.getElementById('picks-page-title').textContent = `${CURRENT_WEEK} Picks`;
                 gamesContainer.innerHTML = '';
+
+                if (weeklyGames.length === 0) {
+                    gamesContainer.innerHTML = `<p>No games found for ${CURRENT_WEEK}. Check your Google Sheet or the CURRENT_WEEK variable.</p>`;
+                    return;
+                }
+
                 weeklyGames.forEach(game => {
                     const gameCard = document.createElement('div');
                     gameCard.className = 'game-card';
@@ -441,13 +457,10 @@ Week 2	Thu 09/11/2025	8:15 PM	Commanders	WSH	Packers	GB	0	0	pre	0:00	waiting...	
                 document.querySelectorAll('.game-card').forEach(card => {
                     const gameId = card.dataset.gameId;
 
-                    // Team selection logic
                     card.querySelectorAll('.team').forEach(team => {
                         team.addEventListener('click', () => {
-                            // Remove 'selected' from sibling team
-                            const otherTeam = team.nextElementSibling?.matches('.team') ? team.nextElementSibling : team.previousElementSibling;
+                            const otherTeam = team.parentElement.querySelector('.team:not([data-team-name="' + team.dataset.teamName + '"])');
                             otherTeam.classList.remove('selected');
-                            // Toggle 'selected' on clicked team
                             team.classList.toggle('selected');
                             
                             if (team.classList.contains('selected')) {
@@ -459,17 +472,13 @@ Week 2	Thu 09/11/2025	8:15 PM	Commanders	WSH	Packers	GB	0	0	pre	0:00	waiting...	
                         });
                     });
 
-                    // Double up logic
                     const doubleUpBtn = card.querySelector('.double-up-btn');
                     doubleUpBtn.addEventListener('click', () => {
-                        // If this button is already selected, deselect it
                         if (doubleUpBtn.classList.contains('selected')) {
                             doubleUpBtn.classList.remove('selected');
                             doubleUpPick = null;
                         } else {
-                            // Deselect all other double up buttons
                             document.querySelectorAll('.double-up-btn').forEach(btn => btn.classList.remove('selected'));
-                            // Select this one
                             doubleUpBtn.classList.add('selected');
                             doubleUpPick = gameId;
                         }
@@ -479,10 +488,11 @@ Week 2	Thu 09/11/2025	8:15 PM	Commanders	WSH	Packers	GB	0	0	pre	0:00	waiting...	
             }
 
             // --- Initial Application Load ---
-            function init() {
+            async function init() {
                 showPage('home-page');
                 populatePickHistory();
-                renderGames();
+                await fetchGameData(); // Wait for data to be fetched
+                renderGames(); // Then render the games
             }
 
             init();
