@@ -116,15 +116,6 @@ function updateUserStatusUI() {
         userStatusDiv.innerHTML = `<a href="#auth" class="nav-link">Login / Sign Up</a>`;
         mainNav.classList.add('hidden');
     }
-}
-
-userStatusDiv.addEventListener('click', (e) => {
-    if (e.target.id === 'logout-btn') {
-        logoutUser();
-    }
-    if (e.target.closest('.nav-link')) {
-        showPage('auth-page');
-    }
 });
 
 // =================================================================
@@ -176,6 +167,13 @@ function showPage(pageId) {
 }
 
 navContainer.addEventListener('click', (e) => {
+    // 1. Check for a click on the logout button
+    if (e.target.id === 'logout-btn') {
+        logoutUser();
+        return; // Stop here
+    }
+
+    // 2. Check for a click on any navigation link
     const navLink = e.target.closest('.nav-link');
     if (navLink) {
         e.preventDefault();
