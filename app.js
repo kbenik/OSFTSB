@@ -32,6 +32,48 @@ const savePicksBtn = document.getElementById('save-picks-btn');
 const logo = document.getElementById('logo');
 const navContainer = document.querySelector('nav.container');
 
+// =================================================================
+// --- UPDATED: Smarter Date & Time Logic ---
+// =================================================================
+
+function getKickoffTimeAsDate(game) {
+    const dateStr = game.Date.split(' ')[1];
+    const timeStr = game.Time;
+    const dateTimeString = `${dateStr} ${timeStr} EST`;
+    return new Date(dateTimeString);
+}
+
+/**
+ * Scans all games to determine the current REGULAR SEASON week for picking.
+ * It ignores pre-season and finds the first regular season week with upcoming games.
+ * @param {Array<object>} games - The array of all games.
+ * @returns {string} The name of the current week (e.g., "Week 1").
+ */
+function determineCurrentWeek(games) {
+    const now = new Date();
+
+    // 1. Filter for REGULAR SEASON games only.
+    const regularSeasonGames = games.filter(game => game.Week.startsWith('Week '));
+
+    if (regularSeasonGames.length === 0) {
+        return "No Regular Season Games Found";
+    }
+
+    // 2. Sort these games chronologically.
+    const sortedGames = [...regularSeasonGames].sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
+
+    // 3. Find the first regular season game whose kickoff time is in the future.
+    const upcomingGame = sortedGames.find(game => getKickoffTimeAsDate(game) > now);
+
+    if (upcomingGame) {
+        // If we found an upcoming game, that's our active week.
+        return upcomingGame.Week;
+    } else {
+        // If all regular season games are in the past, default to the last one.
+        return sortedGames[sortedGames.length - 1].Week;
+    }
+}
+
 
 // =================================================================
 // AUTHENTICATION (No changes in this section)
@@ -146,42 +188,20 @@ function showPage(pageId) {
     document.getElementById(pageId)?.classList.add('active');
 }
 
-// --- NEW: ROBUST NAVIGATION HANDLER ---
-// This single event listener handles all clicks inside the main <nav> element.
 navContainer.addEventListener('click', (e) => {
-    // Check if the clicked element is a link with the 'nav-link' class
     const navLink = e.target.closest('.nav-link');
     if (navLink) {
-        e.preventDefault(); // Stop the link from trying to change the URL
+        e.preventDefault();
         const pageId = navLink.getAttribute('href').substring(1) + '-page';
         showPage(pageId);
     }
 });
 
-// Make the logo a home button when logged in
 logo.addEventListener('click', () => {
     if (currentUser) {
         showPage('home-page');
     }
 });
-
-
-// (The rest of the file for fetching and rendering games remains the same...)
-function getKickoffTimeAsDate(game) {
-    const dateStr = game.Date.split(' ')[1];
-    const timeStr = game.Time;
-    const dateTimeString = `${dateStr} ${timeStr} EST`;
-    return new Date(dateTimeString);
-}
-
-function determineCurrentWeek(games) {
-    const now = new Date();
-    const sortedGames = [...games].sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
-    const upcomingGame = sortedGames.find(game => getKickoffTimeAsDate(game) > now);
-    if (upcomingGame) return upcomingGame.Week;
-    if (games.length > 0) return games[games.length - 1].Week;
-    return "No Upcoming Games";
-}
 
 async function fetchGameData() {
     try {
