@@ -116,7 +116,7 @@ function updateUserStatusUI() {
         userStatusDiv.innerHTML = `<a href="#auth" class="nav-link">Login / Sign Up</a>`;
         mainNav.classList.add('hidden');
     }
-});
+}
 
 // =================================================================
 // DASHBOARD & DATA FETCHING
