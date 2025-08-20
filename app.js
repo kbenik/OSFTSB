@@ -81,6 +81,10 @@ loginForm.addEventListener('submit', async (e) => {
 
 async function logoutUser() {
     await supabase.auth.signOut();
+
+    // Manually trigger the UI update and page change for an instant response.
+    currentUser = null;
+    handleUserLoggedOut(); 
 }
 
 supabase.auth.onAuthStateChange(async (event, session) => {
