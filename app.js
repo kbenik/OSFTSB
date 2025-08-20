@@ -205,19 +205,18 @@ function parseCSV(csvText) {
     const lines = csvText.trim().split('\n');
     if (lines.length < 2) return [];
 
+    // Trim headers to remove any potential whitespace issues
     const headers = lines[0].split(',').map(h => h.trim());
     
     return lines.slice(1).map(line => {
-        const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
+        // Using a simple split is more reliable for this CSV structure 
+        // as it correctly creates empty strings for empty fields.
+        const values = line.split(',');
         
-        // --- THE FIX IS HERE ---
-        // This ensures we only process as many values as there are headers, preventing misalignment.
-        const trimmedValues = values.slice(0, headers.length);
-
         const game = {};
         headers.forEach((header, index) => {
-            // Use the trimmedValues array
-            let value = trimmedValues[index] || '';
+            let value = values[index] || '';
+            // It's still good practice to remove potential quotes and trim the value
             value = value.replace(/^"|"$/g, '').trim();
             game[header] = value;
         });
