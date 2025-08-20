@@ -17,6 +17,11 @@ body {
     line-height: 1.6;
 }
 
+/* NEW UTILITY CLASS */
+.hidden {
+    display: none !important;
+}
+
 .container {
     max-width: 960px;
     margin: 0 auto;
@@ -40,6 +45,34 @@ nav .logo {
     font-size: 1.5rem;
     font-weight: bold;
 }
+
+/* --- NEW STYLES FOR MAIN NAVIGATION --- */
+/* This correctly positions the main nav links (Dashboard, Picks) */
+#main-nav {
+    flex-grow: 1; /* Allows the menu to take up the middle space */
+    display: flex;
+    justify-content: center; /* Centers the links */
+    list-style: none; /* Removes bullet points */
+    margin: 0;
+    padding: 0;
+    gap: 10px; /* Adjusts space between links */
+}
+
+/* This styles the actual links */
+#main-nav .nav-link {
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+}
+
+#main-nav .nav-link:hover {
+    background-color: var(--secondary-color);
+}
+/* --- END OF NEW STYLES --- */
+
 
 #user-status {
     display: flex;
