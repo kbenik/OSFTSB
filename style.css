@@ -1,0 +1,157 @@
+:root {
+    --primary-color: #0d47a1; /* NFL Blue */
+    --secondary-color: #d50a0a; /* NFL Red */
+    --accent-color: #ffc107;
+    --background-color: #f4f6f8;
+    --text-color: #333;
+    --card-background: #ffffff;
+    --border-radius: 8px;
+    --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    background-color: var(--background-color);
+    color: var(--text-color);
+    line-height: 1.6;
+}
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 1rem 0;
+    box-shadow: var(--box-shadow);
+}
+
+nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+nav .logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+}
+
+#user-status {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#user-status a, #user-status button {
+    color: white;
+    text-decoration: none;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 5px;
+    transition: background-color 0.3s;
+    background: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 1rem;
+}
+
+#user-status a:hover, #user-status button:hover {
+    background-color: var(--secondary-color);
+}
+
+#user-status button {
+    border-color: white;
+}
+
+main {
+    padding-top: 20px;
+}
+
+.page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+h1, h2 {
+    color: var(--primary-color);
+}
+
+.card {
+    background-color: var(--card-background);
+    border-radius: var(--border-radius);
+    box-shadow: var(--box-shadow);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+/* Auth Page Styles */
+.auth-form-container {
+    display: flex;
+    justify-content: space-around;
+    gap: 40px;
+}
+.auth-form {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+.auth-form h2 {
+    text-align: center;
+    margin-top: 0;
+}
+.auth-form input {
+    padding: 12px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1rem;
+}
+.auth-form button {
+    padding: 12px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 1.1rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+.auth-form button:hover {
+    background-color: var(--secondary-color);
+}
+
+
+/* Home Page Styles */
+.score-display { text-align: center; padding: 30px; }
+.score-display h2 { margin-top: 0; }
+.score-display .score { font-size: 3rem; font-weight: bold; color: var(--primary-color); }
+.pick-history-table { width: 100%; border-collapse: collapse; }
+.pick-history-table th, .pick-history-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+.pick-history-table th { background-color: #f2f2f2; }
+.pick-history-table .correct { color: green; font-weight: bold; }
+.pick-history-table .incorrect { color: red; font-weight: bold; }
+
+/* Picks Page Styles */
+.game-card { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 15px; margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: var(--border-radius); background-color: var(--card-background); box-shadow: var(--box-shadow); position: relative; }
+.game-card.locked::before { content: 'LOCKED'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); background-color: rgba(213, 10, 10, 0.7); color: white; padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 1.2rem; z-index: 10; }
+.game-card.locked .team, .game-card.locked .double-up-btn { opacity: 0.5; pointer-events: none; }
+.team { display: flex; flex-direction: column; align-items: center; cursor: pointer; padding: 10px; border-radius: var(--border-radius); transition: background-color 0.3s, transform 0.2s; border: 2px solid transparent; }
+.team:hover { transform: translateY(-3px); }
+.team.selected { background-color: #e3f2fd; border-color: var(--primary-color); }
+.team img { width: 60px; height: 60px; margin-bottom: 10px; }
+.team-name { font-weight: 600; text-align: center; }
+.game-separator { font-weight: bold; color: var(--secondary-color); }
+.game-info { grid-column: 1 / -1; text-align: center; font-size: 0.9rem; color: #666; padding-top: 10px; border-top: 1px solid #eee; margin-top: 15px; }
+.double-up-container { grid-column: 1 / -1; text-align: center; margin-top: 10px; }
+.double-up-btn { background-color: #e0e0e0; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: background-color 0.3s; }
+.double-up-btn.selected { background-color: var(--accent-color); color: var(--text-color); font-weight: bold; }
+.save-picks-btn { display: block; width: 100%; padding: 15px; background-color: var(--primary-color); color: white; border: none; border-radius: var(--border-radius); font-size: 1.2rem; cursor: pointer; transition: background-color 0.3s; margin-top: 20px; }
+.save-picks-btn:hover { background-color: var(--secondary-color); }
