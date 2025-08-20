@@ -4,287 +4,55 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OSFTSB Game</title>
-    <style>
-        :root {
-            --primary-color: #0d47a1; /* NFL Blue */
-            --secondary-color: #d50a0a; /* NFL Red */
-            --accent-color: #ffc107;
-            --background-color: #f4f6f8;
-            --text-color: #333;
-            --card-background: #ffffff;
-            --border-radius: 8px;
-            --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            margin: 0;
-            background-color: var(--background-color);
-            color: var(--text-color);
-            line-height: 1.6;
-        }
-
-        .container {
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        header {
-            background-color: var(--primary-color);
-            color: white;
-            padding: 1rem 0;
-            box-shadow: var(--box-shadow);
-        }
-
-        nav {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            max-width: 960px;
-            margin: 0 auto;
-            padding: 0 20px;
-        }
-
-        nav .logo {
-            font-size: 1.5rem;
-            font-weight: bold;
-        }
-
-        nav ul {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-            display: flex;
-        }
-
-        nav ul li {
-            margin-left: 20px;
-        }
-
-        nav ul li a {
-            color: white;
-            text-decoration: none;
-            font-weight: 500;
-            padding: 5px 10px;
-            border-radius: 5px;
-            transition: background-color: 0.3s;
-        }
-
-        nav ul li a.active,
-        nav ul li a:hover {
-            background-color: var(--secondary-color);
-        }
-
-        main {
-            padding-top: 20px;
-        }
-
-        .page {
-            display: none;
-        }
-
-        .page.active {
-            display: block;
-        }
-
-        h1, h2 {
-            color: var(--primary-color);
-        }
-
-        .card {
-            background-color: var(--card-background);
-            border-radius: var(--border-radius);
-            box-shadow: var(--box-shadow);
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-
-        /* Home Page Styles */
-        .score-display {
-            text-align: center;
-            padding: 30px;
-        }
-
-        .score-display h2 {
-            margin-top: 0;
-        }
-
-        .score-display .score {
-            font-size: 3rem;
-            font-weight: bold;
-            color: var(--primary-color);
-        }
-
-        .pick-history-table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        .pick-history-table th,
-        .pick-history-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-
-        .pick-history-table th {
-            background-color: #f2f2f2;
-        }
-
-        .pick-history-table .correct {
-            color: green;
-            font-weight: bold;
-        }
-
-        .pick-history-table .incorrect {
-            color: red;
-            font-weight: bold;
-        }
-
-        /* Picks Page Styles */
-        .game-card {
-            display: grid;
-            grid-template-columns: 1fr auto 1fr;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 20px;
-            padding: 15px;
-            border: 1px solid #e0e0e0;
-            border-radius: var(--border-radius);
-            background-color: var(--card-background);
-            box-shadow: var(--box-shadow);
-            position: relative;
-        }
-        
-        .game-card.locked::before {
-            content: 'LOCKED';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(-15deg);
-            background-color: rgba(213, 10, 10, 0.7);
-            color: white;
-            padding: 5px 15px;
-            border-radius: 5px;
-            font-weight: bold;
-            font-size: 1.2rem;
-            z-index: 10;
-        }
-
-        .game-card.locked .team, .game-card.locked .double-up-btn {
-             opacity: 0.5;
-             pointer-events: none;
-        }
-
-        .team {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            cursor: pointer;
-            padding: 10px;
-            border-radius: var(--border-radius);
-            transition: background-color 0.3s, transform 0.2s;
-            border: 2px solid transparent;
-        }
-
-        .team:hover {
-            transform: translateY(-3px);
-        }
-
-        .team.selected {
-            background-color: #e3f2fd;
-            border-color: var(--primary-color);
-        }
-
-        .team img {
-            width: 60px;
-            height: 60px;
-            margin-bottom: 10px;
-        }
-
-        .team-name {
-            font-weight: 600;
-            text-align: center;
-        }
-
-        .game-separator {
-            font-weight: bold;
-            color: var(--secondary-color);
-        }
-        
-        .game-info {
-            grid-column: 1 / -1;
-            text-align: center;
-            font-size: 0.9rem;
-            color: #666;
-            padding-top: 10px;
-            border-top: 1px solid #eee;
-            margin-top: 15px;
-        }
-
-        .double-up-container {
-            grid-column: 1 / -1;
-            text-align: center;
-            margin-top: 10px;
-        }
-
-        .double-up-btn {
-            background-color: #e0e0e0;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 20px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-
-        .double-up-btn.selected {
-            background-color: var(--accent-color);
-            color: var(--text-color);
-            font-weight: bold;
-        }
-
-        .save-picks-btn {
-            display: block;
-            width: 100%;
-            padding: 15px;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: var(--border-radius);
-            font-size: 1.2rem;
-            cursor: pointer;
-            transition: background-color 0.3s;
-            margin-top: 20px;
-        }
-
-        .save-picks-btn:hover {
-            background-color: var(--secondary-color);
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
     <header>
         <nav class="container">
             <div class="logo">OSFTSB</div>
-            <ul>
-                <li><a href="#home" class="nav-link active">Home</a></li>
-                <li><a href="#picks" class="nav-link">Weekly Picks</a></li>
-            </ul>
+            <div id="user-status">
+                <!-- This will be updated by JavaScript -->
+                <a href="#auth" class="nav-link">Login / Sign Up</a>
+            </div>
         </nav>
     </header>
 
     <main class="container">
+        <!-- Authentication Page -->
+        <section id="auth-page" class="page">
+            <h1>Join the Game</h1>
+            <div class="card">
+                <div class="auth-form-container">
+                    <!-- Sign Up Form -->
+                    <form id="sign-up-form" class="auth-form">
+                        <h2>Sign Up</h2>
+                        <input type="text" id="sign-up-username" placeholder="Username" required>
+                        <input type="email" id="sign-up-email" placeholder="Email" required>
+                        <input type="password" id="sign-up-password" placeholder="Password" required>
+                        <button type="submit">Sign Up</button>
+                    </form>
+                    <!-- Login Form -->
+                    <form id="login-form" class="auth-form">
+                        <h2>Login</h2>
+                        <input type="email" id="login-email" placeholder="Email" required>
+                        <input type="password" id="login-password" placeholder="Password" required>
+                        <button type="submit">Login</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+
         <!-- Home Page / Dashboard -->
-        <section id="home-page" class="page active">
+        <section id="home-page" class="page">
             <h1>Dashboard</h1>
             <div class="card score-display">
                 <h2>Your Current Score</h2>
-                <p class="score" id="user-score">12</p>
+                <p class="score" id="user-score">0</p>
             </div>
             <div class="card">
-                <h2>Pick History (Pre-Season)</h2>
+                <h2>My Pick History</h2>
                 <table class="pick-history-table">
                     <thead>
                         <tr>
@@ -307,197 +75,12 @@
             <div id="games-container">
                 <p>Loading live game data...</p>
             </div>
-            <button class="save-picks-btn">Save Picks</button>
+            <button id="save-picks-btn" class="save-picks-btn">Save Picks</button>
         </section>
     </main>
 
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            // --- CONFIGURATION ---
-            const CURRENT_WEEK = 'Week 1'; // Change this to the current week you want to display
-            
-            // !!! IMPORTANT !!! 
-            // PASTE YOUR PUBLISHED GOOGLE SHEET URL HERE
-            const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv'; // Replace with your actual URL
-
-            let allGames = []; // This will hold all games fetched from the sheet
-
-            const mockPickHistory = [
-                { game: 'IND @ BAL', pick: 'BAL', result: 'Correct', points: '+2 (2x)' },
-                { game: 'CIN @ PHI', pick: 'CIN', result: 'Incorrect', points: '-2' },
-                { game: 'LV @ SEA', pick: 'LV', result: 'Correct', points: '+1' },
-            ];
-
-            // --- DATA PARSING FUNCTION ---
-            function parseGameData(csvText) {
-                const lines = csvText.trim().split('\n');
-                const headers = lines[0].split(',');
-                return lines.slice(1).map(line => {
-                    const values = line.split(',');
-                    const game = {};
-                    headers.forEach((header, index) => {
-                        // Trim whitespace and remove quotes that CSV might add
-                        game[header.trim()] = values[index].trim().replace(/^"|"$/g, '');
-                    });
-                    return game;
-                });
-            }
-
-            // --- LIVE DATA FETCHING ---
-            async function fetchGameData() {
-                try {
-                    const response = await fetch(SHEET_URL);
-                    if (!response.ok) {
-                        throw new Error(`Network response was not ok: ${response.statusText}`);
-                    }
-                    const csvText = await response.text();
-                    allGames = parseGameData(csvText);
-                    return allGames;
-                } catch (error) {
-                    console.error('Failed to fetch game data:', error);
-                    document.getElementById('games-container').innerHTML = '<p>Error: Could not load game data. Please check the SHEET_URL and make sure the sheet is published correctly.</p>';
-                    return []; // Return empty array on error
-                }
-            }
-
-            // --- Page Navigation ---
-            const navLinks = document.querySelectorAll('.nav-link');
-            const pages = document.querySelectorAll('.page');
-
-            function showPage(pageId) {
-                pages.forEach(page => page.classList.remove('active'));
-                document.getElementById(pageId)?.classList.add('active');
-                
-                navLinks.forEach(link => {
-                    link.classList.remove('active');
-                    if (link.getAttribute('href') === `#${pageId.replace('-page', '')}`) {
-                        link.classList.add('active');
-                    }
-                });
-            }
-
-            navLinks.forEach(link => {
-                link.addEventListener('click', (e) => {
-                    e.preventDefault();
-                    const pageId = e.target.getAttribute('href').substring(1) + '-page';
-                    showPage(pageId);
-                });
-            });
-
-            // --- Home Page Logic ---
-            function populatePickHistory() {
-                const historyBody = document.getElementById('pick-history-body');
-                historyBody.innerHTML = '';
-                mockPickHistory.forEach(pick => {
-                    const row = document.createElement('tr');
-                    const resultClass = pick.result.toLowerCase();
-                    row.innerHTML = `
-                        <td>${pick.game}</td>
-                        <td>${pick.pick}</td>
-                        <td class="${resultClass}">${pick.result}</td>
-                        <td class="${resultClass}">${pick.points}</td>
-                    `;
-                    historyBody.appendChild(row);
-                });
-            }
-
-            // --- Picks Page Logic ---
-            const gamesContainer = document.getElementById('games-container');
-            let userPicks = {}; // { gameID: 'teamName' }
-            let doubleUpPick = null; // gameID
-
-            function isGameLocked(game) {
-                return game.Status !== 'pre';
-            }
-
-            function renderGames() {
-                const weeklyGames = allGames.filter(game => game.Week === CURRENT_WEEK);
-                document.getElementById('picks-page-title').textContent = `${CURRENT_WEEK} Picks`;
-                gamesContainer.innerHTML = '';
-
-                if (weeklyGames.length === 0) {
-                    gamesContainer.innerHTML = `<p>No games found for ${CURRENT_WEEK}. Check your Google Sheet or the CURRENT_WEEK variable.</p>`;
-                    return;
-                }
-
-                weeklyGames.forEach(game => {
-                    const gameCard = document.createElement('div');
-                    gameCard.className = 'game-card';
-                    gameCard.dataset.gameId = game['Game Id'];
-
-                    const locked = isGameLocked(game);
-                    if (locked) {
-                        gameCard.classList.add('locked');
-                    }
-
-                    gameCard.innerHTML = `
-                        <div class="team" data-team-name="${game['Away Display Name']}">
-                            <img src="${game['Away Logo']}" alt="${game['Away Display Name']}">
-                            <span class="team-name">${game['Away Display Name']}</span>
-                        </div>
-                        <div class="game-separator">@</div>
-                        <div class="team" data-team-name="${game['Home Display Name']}">
-                            <img src="${game['Home Logo']}" alt="${game['Home Display Name']}">
-                            <span class="team-name">${game['Home Display Name']}</span>
-                        </div>
-                        <div class="game-info">
-                            ${new Date(game.Date + ' ' + game.Time).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                        </div>
-                        <div class="double-up-container">
-                            <button class="double-up-btn">Double Up</button>
-                        </div>
-                    `;
-                    gamesContainer.appendChild(gameCard);
-                });
-
-                addGameCardEventListeners();
-            }
-
-            function addGameCardEventListeners() {
-                document.querySelectorAll('.game-card').forEach(card => {
-                    const gameId = card.dataset.gameId;
-
-                    card.querySelectorAll('.team').forEach(team => {
-                        team.addEventListener('click', () => {
-                            const otherTeam = team.parentElement.querySelector('.team:not([data-team-name="' + team.dataset.teamName + '"])');
-                            otherTeam.classList.remove('selected');
-                            team.classList.toggle('selected');
-                            
-                            if (team.classList.contains('selected')) {
-                                userPicks[gameId] = team.dataset.teamName;
-                            } else {
-                                delete userPicks[gameId];
-                            }
-                            console.log('Current Picks:', userPicks);
-                        });
-                    });
-
-                    const doubleUpBtn = card.querySelector('.double-up-btn');
-                    doubleUpBtn.addEventListener('click', () => {
-                        if (doubleUpBtn.classList.contains('selected')) {
-                            doubleUpBtn.classList.remove('selected');
-                            doubleUpPick = null;
-                        } else {
-                            document.querySelectorAll('.double-up-btn').forEach(btn => btn.classList.remove('selected'));
-                            doubleUpBtn.classList.add('selected');
-                            doubleUpPick = gameId;
-                        }
-                        console.log('Double Up Pick:', doubleUpPick);
-                    });
-                });
-            }
-
-            // --- Initial Application Load ---
-            async function init() {
-                showPage('home-page');
-                populatePickHistory();
-                await fetchGameData(); // Wait for data to be fetched
-                renderGames(); // Then render the games
-            }
-
-            init();
-        });
-    </script>
+    <!-- The 'type="module"' is important! -->
+    <script src="app.js" type="module"></script>
 
 </body>
 </html>
