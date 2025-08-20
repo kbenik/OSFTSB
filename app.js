@@ -80,16 +80,10 @@ loginForm.addEventListener('submit', async (e) => {
 });
 
 async function logoutUser() {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-        console.error('Error logging out:', error);
-        alert('Could not log out. Please try again.');
-    }
-    // The onAuthStateChange listener will reliably handle the UI update.
+    await supabase.auth.signOut();
 }
 
 supabase.auth.onAuthStateChange(async (event, session) => {
-    // This function now reliably handles all state changes
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
         currentUser = session.user;
         await handleUserLoggedIn();
@@ -124,19 +118,14 @@ function updateUserStatusUI() {
     }
 }
 
-// --- NEW: ROBUST EVENT LISTENER FOR USER ACTIONS ---
-// This single listener on the parent div handles clicks for login or logout.
 userStatusDiv.addEventListener('click', (e) => {
-    // Check if the logout button was clicked
     if (e.target.id === 'logout-btn') {
         logoutUser();
     }
-    // Check if the login link was clicked
     if (e.target.closest('.nav-link')) {
         showPage('auth-page');
     }
 });
-
 
 // =================================================================
 // DASHBOARD & DATA FETCHING
@@ -211,21 +200,31 @@ async function fetchGameData() {
     }
 }
 
+// --- UPDATED: The Final, Most Robust CSV Parser ---
 function parseCSV(csvText) {
     const lines = csvText.trim().split('\n');
     if (lines.length < 2) return [];
+
     const headers = lines[0].split(',').map(h => h.trim());
+    
     return lines.slice(1).map(line => {
         const values = line.match(/(".*?"|[^",]+)(?=\s*,|\s*$)/g) || [];
+        
+        // --- THE FIX IS HERE ---
+        // This ensures we only process as many values as there are headers, preventing misalignment.
+        const trimmedValues = values.slice(0, headers.length);
+
         const game = {};
         headers.forEach((header, index) => {
-            let value = values[index] || '';
+            // Use the trimmedValues array
+            let value = trimmedValues[index] || '';
             value = value.replace(/^"|"$/g, '').trim();
             game[header] = value;
         });
         return game;
     });
 }
+
 
 function renderGames() {
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
@@ -242,7 +241,25 @@ function renderGames() {
         gameCard.dataset.gameId = game['Game Id'];
         const kickoffTime = getKickoffTimeAsDate(game);
         if (kickoffTime < now) gameCard.classList.add('locked');
-        gameCard.innerHTML = `<div class="team" data-team-name="${game['Away Display Name']}"><img src="${game['Away Logo']}" alt="${game['Away Display Name']}"><span class="team-name">${game['Away Display Name']}</span></div><div class="game-separator">@</div><div class="team" data-team-name="${game['Home Display Name']}"><img src="${game['Home Logo']}" alt="${game['Home Display Name']}"><span class="team-name">${game['Home Display Name']}</span></div><div class="game-info">${kickoffTime.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div><div class="double-up-container"><button class="double-up-btn">Double Up</button></div>`;
+        
+        const awayLogo = game['Away Logo'] || '';
+        const homeLogo = game['Home Logo'] || '';
+        const awayName = game['Away Display Name'] || 'Team';
+        const homeName = game['Home Display Name'] || 'Team';
+
+        gameCard.innerHTML = `
+            <div class="team" data-team-name="${awayName}">
+                <img src="${awayLogo}" alt="${awayName}">
+                <span class="team-name">${awayName}</span>
+            </div>
+            <div class="game-separator">@</div>
+            <div class="team" data-team-name="${homeName}">
+                <img src="${homeLogo}" alt="${homeName}">
+                <span class="team-name">${homeName}</span>
+            </div>
+            <div class="game-info">${kickoffTime.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+            <div class="double-up-container"><button class="double-up-btn">Double Up</button></div>
+        `;
         gamesContainer.appendChild(gameCard);
     });
     addGameCardEventListeners();
@@ -308,12 +325,11 @@ savePicksBtn.addEventListener('click', async () => {
 async function init() {
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
-    
-    // Let onAuthStateChange handle the initial user check and UI rendering
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         handleUserLoggedOut();
     }
+    // onAuthStateChange will handle the logged in case
 }
 
 init();
