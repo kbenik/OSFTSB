@@ -82,15 +82,11 @@ loginForm.addEventListener('submit', async (e) => {
 async function logoutUser() {
     const { error } = await supabase.auth.signOut();
     if (error) {
-        // If there was an error, show it and stop.
         console.error('Error logging out:', error);
-        alert('Could not log out. Please try again.');
-        return;
+        return alert('Could not log out. Please try again.');
     }
-    
-    // Don't wait for the listener. Manually reset the app state now.
     currentUser = null;
-    handleUserLoggedOut(); // This function already updates the UI and shows the auth page.
+    handleUserLoggedOut();
 }
 
 supabase.auth.onAuthStateChange(async (event, session) => {
@@ -160,7 +156,6 @@ function renderDashboard(profile, picks) {
 // PAGE NAVIGATION & PICKS LOGIC
 // =================================================================
 
-// --- UPDATED: showPage function ---
 function showPage(pageId) {
     if (pageId !== 'auth-page' && !currentUser) {
         showPage('auth-page');
@@ -168,11 +163,8 @@ function showPage(pageId) {
     }
     pages.forEach(page => page.classList.remove('active'));
     const activePage = document.getElementById(pageId);
-    if (activePage) {
-        activePage.classList.add('active');
-    }
+    if (activePage) activePage.classList.add('active');
 
-    // --- CHANGE #2: Render games ONLY when the picks page is shown ---
     if (pageId === 'picks-page') {
         renderGames();
     }
@@ -188,9 +180,7 @@ navContainer.addEventListener('click', (e) => {
 });
 
 logo.addEventListener('click', () => {
-    if (currentUser) {
-        showPage('home-page');
-    }
+    if (currentUser) showPage('home-page');
 });
 
 async function fetchGameData() {
@@ -198,7 +188,7 @@ async function fetchGameData() {
         const response = await fetch(SHEET_URL);
         if (!response.ok) throw new Error('Network response was not ok');
         const csvText = await response.text();
-        allGames = parseCSV(csvText); // Using a robust parser
+        allGames = parseCSV(csvText);
     } catch (error) {
         console.error('Failed to fetch game data:', error);
         gamesContainer.innerHTML = '<p>Error: Could not load game data. Check console for details.</p>';
@@ -253,10 +243,26 @@ function addGameCardEventListeners() {
                 userPicks[gameId] = team.classList.contains('selected') ? team.dataset.teamName : undefined;
             });
         });
+
+        // --- UPDATED: Double Up Logic ---
         card.querySelector('.double-up-btn').addEventListener('click', (e) => {
-            const btn = e.currentTarget;
-            if (btn.classList.contains('selected')) { btn.classList.remove('selected'); doubleUpPick = null; } 
-            else { document.querySelectorAll('.double-up-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); doubleUpPick = gameId; }
+            const clickedButton = e.currentTarget;
+            const wasAlreadySelected = clickedButton.classList.contains('selected');
+
+            // First, clear any and all existing double up selections from the UI.
+            document.querySelectorAll('.double-up-btn.selected').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+
+            // Now, decide the new state.
+            if (wasAlreadySelected) {
+                // If the user clicked the button that was already selected, it's a toggle OFF.
+                doubleUpPick = null;
+            } else {
+                // If the user clicked a new button, it's a toggle ON for that button.
+                clickedButton.classList.add('selected');
+                doubleUpPick = gameId;
+            }
         });
     });
 }
@@ -270,11 +276,22 @@ savePicksBtn.addEventListener('click', async () => {
             if (getKickoffTimeAsDate(game) < now) { return alert(`Too late! The ${game['Away Display Name']} @ ${game['Home Display Name']} game has already started and is locked.`); }
         }
     }
-    const picksToInsert = Object.keys(userPicks).filter(gameId => userPicks[gameId]).map(gameId => ({ user_id: currentUser.id, game_id: parseInt(gameId), picked_team: userPicks[gameId], is__double_up: gameId === doubleUpPick, week: activeWeek }));
+    const picksToInsert = Object.keys(userPicks).filter(gameId => userPicks[gameId]).map(gameId => ({
+        user_id: currentUser.id,
+        game_id: parseInt(gameId),
+        picked_team: userPicks[gameId],
+        // --- FIXED: Typo `is__double_up` changed to `is_double_up` ---
+        is_double_up: gameId === doubleUpPick,
+        week: activeWeek
+    }));
     if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
     const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
-    if (error) { alert('Error saving picks: ' + error.message); } 
-    else { alert('Your picks have been saved!'); fetchDashboardData(); }
+    if (error) {
+        alert('Error saving picks: ' + error.message);
+    } else {
+        alert('Your picks have been saved!');
+        fetchDashboardData();
+    }
 });
 
 // =================================================================
@@ -284,18 +301,13 @@ savePicksBtn.addEventListener('click', async () => {
 async function init() {
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
-    
     const { data: { session } } = await supabase.auth.getSession();
     currentUser = session?.user || null;
-    
     if (currentUser) {
         await handleUserLoggedIn();
     } else {
         handleUserLoggedOut();
     }
-    
-    // --- CHANGE #1: Do NOT render games on initial load ---
-    // renderGames(); // This line is now removed.
 }
 
 init();
