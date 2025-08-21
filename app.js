@@ -12,7 +12,7 @@ const supabase = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // --- GOOGLE SHEET DATA ---
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
 
-let isGameDataLoaded = false; // State variable to track loading
+let isGameDataLoaded = false;
 let activeWeek = '';
 let allGames = [];
 let userPicks = {};
@@ -94,10 +94,13 @@ async function logoutUser() {
 }
 
 supabase.auth.onAuthStateChange(async (event, session) => {
+    console.log(`AUTH STATE CHANGE: Event -> ${event}`); // DEBUG
     if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
+        console.log('  -> User session found, setting currentUser:', session.user); // DEBUG
         currentUser = session.user;
         await handleUserLoggedIn();
     } else if (event === 'SIGNED_OUT') {
+        console.log('  -> User session removed, setting currentUser to null.'); // DEBUG
         currentUser = null;
         handleUserLoggedOut();
     }
@@ -135,7 +138,13 @@ function updateUserStatusUI() {
 async function fetchDashboardData() {
     if (!currentUser) return;
     const { data: profile } = await supabase.from('profiles').select('score').eq('id', currentUser.id).single();
-    const { data: picks } = await supabase.from('picks').select('*').eq('user_id', currentUser.id);
+    const { data: picks, error } = await supabase.from('picks').select('*').eq('user_id', currentUser.id);
+    
+    // DEBUG: Check if there's an error reading picks (due to RLS)
+    if (error) {
+        console.error("Error fetching user picks for dashboard:", error);
+    }
+
     renderDashboard(profile, picks);
 }
 
@@ -229,7 +238,6 @@ function renderGames() {
         gamesContainer.innerHTML = '<p>Loading live game data...</p>';
         return;
     }
-
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
     gamesContainer.innerHTML = '';
@@ -244,22 +252,14 @@ function renderGames() {
         gameCard.dataset.gameId = game['Game Id'];
         const kickoffTime = getKickoffTimeAsDate(game);
         if (kickoffTime < now) gameCard.classList.add('locked');
-        
         const awayLogo = game['Away Logo'] || '';
         const homeLogo = game['Home Logo'] || '';
         const awayName = game['Away Display Name'] || 'Team';
         const homeName = game['Home Display Name'] || 'Team';
-
         gameCard.innerHTML = `
-            <div class="team" data-team-name="${awayName}">
-                <img src="${awayLogo}" alt="${awayName}">
-                <span class="team-name">${awayName}</span>
-            </div>
+            <div class="team" data-team-name="${awayName}"><img src="${awayLogo}" alt="${awayName}"><span class="team-name">${awayName}</span></div>
             <div class="game-separator">@</div>
-            <div class="team" data-team-name="${homeName}">
-                <img src="${homeLogo}" alt="${homeName}">
-                <span class="team-name">${homeName}</span>
-            </div>
+            <div class="team" data-team-name="${homeName}"><img src="${homeLogo}" alt="${homeName}"><span class="team-name">${homeName}</span></div>
             <div class="game-info">${kickoffTime.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
             <div class="double-up-container"><button class="double-up-btn">Double Up</button></div>
         `;
@@ -277,6 +277,7 @@ function addGameCardEventListeners() {
                 otherTeam.classList.remove('selected');
                 team.classList.toggle('selected');
                 userPicks[gameId] = team.classList.contains('selected') ? team.dataset.teamName : undefined;
+                console.log('Current userPicks object:', userPicks); // DEBUG
             });
         });
         card.querySelector('.double-up-btn').addEventListener('click', (e) => {
@@ -291,19 +292,36 @@ function addGameCardEventListeners() {
                 clickedButton.classList.add('selected');
                 doubleUpPick = gameId;
             }
+            console.log('Current doubleUpPick:', doubleUpPick); // DEBUG
         });
     });
 }
 
+// --- MODIFIED WITH DEBUGGING ---
 savePicksBtn.addEventListener('click', async () => {
-    if (!currentUser) return alert('You must be logged in to save picks!');
+    console.log("%c--- Save Picks button clicked ---", "color: blue; font-size: 1.2em;");
+
+    console.log("1. Checking current user status...");
+    if (!currentUser) {
+        console.error("  -> ERROR: currentUser is null. Aborting save.");
+        return alert('You must be logged in to save picks!');
+    }
+    console.log("  -> OK: User is logged in.", currentUser);
+
     const now = new Date();
     for (const gameId in userPicks) {
         if (userPicks[gameId]) {
             const game = allGames.find(g => g['Game Id'] == gameId);
-            if (getKickoffTimeAsDate(game) < now) { return alert(`Too late! The ${game['Away Display Name']} @ ${game['Home Display Name']} game has already started and is locked.`); }
+            if (getKickoffTimeAsDate(game) < now) {
+                console.error(`  -> ERROR: Game ${gameId} is locked.`);
+                return alert(`Too late! The ${game['Away Display Name']} @ ${game['Home Display Name']} game has already started and is locked.`);
+            }
         }
     }
+    console.log("2. Checking user picks object...");
+    console.log("  -> User Picks:", JSON.parse(JSON.stringify(userPicks)));
+    console.log("  -> Double Up Pick:", doubleUpPick);
+
     const picksToInsert = Object.keys(userPicks).filter(gameId => userPicks[gameId]).map(gameId => ({
         user_id: currentUser.id,
         game_id: parseInt(gameId),
@@ -311,15 +329,27 @@ savePicksBtn.addEventListener('click', async () => {
         is_double_up: gameId === doubleUpPick,
         week: activeWeek
     }));
-    if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
+    
+    console.log("3. Checking the final data array to be inserted...");
+    console.log("  -> picksToInsert array:", picksToInsert);
+
+    if (picksToInsert.length === 0) {
+        console.warn("  -> WARNING: No picks to insert. Aborting save.");
+        return alert('You haven\'t made any picks yet!');
+    }
+
+    console.log("%c4. Attempting to save to Supabase...", "color: green;");
     const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
+    
     if (error) {
-        console.error('Error saving picks:', error);
+        console.error("  -> SUPABASE ERROR:", error);
         alert('Error saving picks: ' + error.message);
     } else {
+        console.log("%c  -> SUCCESS: Picks saved successfully!", "color: green; font-size: 1.1em;");
         alert('Your picks have been saved!');
         fetchDashboardData();
     }
+    console.log("%c--- Save Picks process finished ---", "color: blue;");
 });
 
 // =================================================================
@@ -329,18 +359,11 @@ savePicksBtn.addEventListener('click', async () => {
 async function init() {
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
-    isGameDataLoaded = true; // Data is now ready
-
-    // --- NEW: Check if the picks page is active and re-render it ---
-    // This makes the loading dynamic. If the user is on the picks page
-    // while the data loads, this will replace the "Loading..." message
-    // with the game cards automatically.
+    isGameDataLoaded = true;
     const picksPage = document.getElementById('picks-page');
     if (picksPage && picksPage.classList.contains('active')) {
         renderGames(); 
     }
-    // --- END OF NEW CODE ---
-
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         handleUserLoggedOut();
