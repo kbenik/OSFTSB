@@ -30,7 +30,6 @@ const pages = document.querySelectorAll('.page');
 const gamesContainer = document.getElementById('games-container');
 const savePicksBtn = document.getElementById('save-picks-btn');
 const logo = document.getElementById('logo');
-const navContainer = document.querySelector('nav.container');
 
 // =================================================================
 // DATE & TIME LOGIC
@@ -81,8 +80,6 @@ loginForm.addEventListener('submit', async (e) => {
 
 async function logoutUser() {
     await supabase.auth.signOut();
-
-    // Manually trigger the UI update and page change for an instant response.
     currentUser = null;
     handleUserLoggedOut(); 
 }
@@ -170,25 +167,34 @@ function showPage(pageId) {
     }
 }
 
-navContainer.addEventListener('click', (e) => {
+// --- FINAL FIX: ATTACH LISTENER TO THE DOCUMENT ---
+// This is more reliable for handling clicks on elements that are dynamically added to the page.
+document.addEventListener('click', (e) => {
     // 1. Check for a click on the logout button
-    if (e.target.id === 'logout-btn') {
+    if (e.target.matches('#logout-btn')) {
         logoutUser();
-        return; // Stop here
+        return; 
     }
 
     // 2. Check for a click on any navigation link
     const navLink = e.target.closest('.nav-link');
     if (navLink) {
-        e.preventDefault();
-        const pageId = navLink.getAttribute('href').substring(1) + '-page';
-        showPage(pageId);
+        // Ensure the click is inside the header's nav to avoid conflicts
+        if (navLink.closest('header')) {
+            e.preventDefault();
+            const pageId = navLink.getAttribute('href').substring(1) + '-page';
+            showPage(pageId);
+        }
+    }
+    
+    // 3. Check for a click on the logo
+    if (e.target.closest('#logo')) {
+        if (currentUser) {
+            showPage('home-page');
+        }
     }
 });
 
-logo.addEventListener('click', () => {
-    if (currentUser) showPage('home-page');
-});
 
 async function fetchGameData() {
     try {
@@ -202,23 +208,15 @@ async function fetchGameData() {
     }
 }
 
-// --- UPDATED: The Final, Most Robust CSV Parser ---
 function parseCSV(csvText) {
     const lines = csvText.trim().split('\n');
     if (lines.length < 2) return [];
-
-    // Trim headers to remove any potential whitespace issues
     const headers = lines[0].split(',').map(h => h.trim());
-    
     return lines.slice(1).map(line => {
-        // Using a simple split is more reliable for this CSV structure 
-        // as it correctly creates empty strings for empty fields.
         const values = line.split(',');
-        
         const game = {};
         headers.forEach((header, index) => {
             let value = values[index] || '';
-            // It's still good practice to remove potential quotes and trim the value
             value = value.replace(/^"|"$/g, '').trim();
             game[header] = value;
         });
