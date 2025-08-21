@@ -58,6 +58,30 @@ function determineCurrentWeek(games) {
 // AUTHENTICATION
 // =================================================================
 
+// --- RESTRUCTURED AUTH FLOW ---
+
+// Central function to handle the user's state
+async function handleAuthStateChange(session) {
+    if (session) {
+        // User is logged in
+        currentUser = session.user;
+        updateUserStatusUI();
+        await fetchDashboardData();
+        // Determine which page to show
+        const currentHash = window.location.hash.substring(1);
+        if (currentHash === 'picks') {
+            showPage('picks-page');
+        } else {
+            showPage('home-page');
+        }
+    } else {
+        // User is logged out
+        currentUser = null;
+        updateUserStatusUI();
+        showPage('auth-page');
+    }
+}
+
 signUpForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const username = document.getElementById('sign-up-username').value;
@@ -80,41 +104,9 @@ loginForm.addEventListener('submit', async (e) => {
 });
 
 async function logoutUser() {
-    try {
-        const { error } = await supabase.auth.signOut();
-        if (error) {
-            console.error('Supabase signOut error:', error.message);
-        }
-    } catch (e) {
-        console.error('Exception during signOut:', e.message);
-    } finally {
-        currentUser = null;
-        handleUserLoggedOut();
-    }
-}
-
-supabase.auth.onAuthStateChange(async (event, session) => {
-    console.log(`AUTH STATE CHANGE: Event -> ${event}`); // DEBUG
-    if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
-        console.log('  -> User session found, setting currentUser:', session.user); // DEBUG
-        currentUser = session.user;
-        await handleUserLoggedIn();
-    } else if (event === 'SIGNED_OUT') {
-        console.log('  -> User session removed, setting currentUser to null.'); // DEBUG
-        currentUser = null;
-        handleUserLoggedOut();
-    }
-});
-
-async function handleUserLoggedIn() {
-    updateUserStatusUI();
-    await fetchDashboardData();
-    showPage('home-page');
-}
-
-function handleUserLoggedOut() {
-    updateUserStatusUI();
-    showPage('auth-page');
+    await supabase.auth.signOut();
+    currentUser = null; // Explicitly clear the user
+    handleAuthStateChange(null);
 }
 
 function updateUserStatusUI() {
@@ -130,6 +122,7 @@ function updateUserStatusUI() {
         mainNav.classList.add('hidden');
     }
 }
+// --- END OF RESTRUCTURED AUTH FLOW ---
 
 // =================================================================
 // DASHBOARD & DATA FETCHING
@@ -138,13 +131,7 @@ function updateUserStatusUI() {
 async function fetchDashboardData() {
     if (!currentUser) return;
     const { data: profile } = await supabase.from('profiles').select('score').eq('id', currentUser.id).single();
-    const { data: picks, error } = await supabase.from('picks').select('*').eq('user_id', currentUser.id);
-    
-    // DEBUG: Check if there's an error reading picks (due to RLS)
-    if (error) {
-        console.error("Error fetching user picks for dashboard:", error);
-    }
-
+    const { data: picks } = await supabase.from('picks').select('*').eq('user_id', currentUser.id);
     renderDashboard(profile, picks);
 }
 
@@ -173,7 +160,7 @@ function renderDashboard(profile, picks) {
 
 function showPage(pageId) {
     if (pageId !== 'auth-page' && !currentUser) {
-        showPage('auth-page');
+        showPage('auth-page'); // Failsafe
         return;
     }
     pages.forEach(page => page.classList.remove('active'));
@@ -200,6 +187,8 @@ document.addEventListener('click', (e) => {
     if (e.target.closest('#logo')) {
         if (currentUser) {
             showPage('home-page');
+        } else {
+            showPage('auth-page');
         }
     }
 });
@@ -212,7 +201,6 @@ async function fetchGameData() {
         allGames = parseCSV(csvText);
     } catch (error) {
         console.error('Failed to fetch game data:', error);
-        gamesContainer.innerHTML = '<p>Error: Could not load game data. Check console for details.</p>';
     }
 }
 
@@ -232,15 +220,14 @@ function parseCSV(csvText) {
     });
 }
 
-function renderGames() {
+async function renderGames() {
     if (!isGameDataLoaded) {
-        document.getElementById('picks-page-title').textContent = 'Weekly Picks';
         gamesContainer.innerHTML = '<p>Loading live game data...</p>';
         return;
     }
+    gamesContainer.innerHTML = ''; // Clear previous games
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
-    gamesContainer.innerHTML = '';
     if (weeklyGames.length === 0) {
         gamesContainer.innerHTML = `<p>No games found for ${activeWeek}.</p>`;
         return;
@@ -277,7 +264,6 @@ function addGameCardEventListeners() {
                 otherTeam.classList.remove('selected');
                 team.classList.toggle('selected');
                 userPicks[gameId] = team.classList.contains('selected') ? team.dataset.teamName : undefined;
-                console.log('Current userPicks object:', userPicks); // DEBUG
             });
         });
         card.querySelector('.double-up-btn').addEventListener('click', (e) => {
@@ -292,36 +278,19 @@ function addGameCardEventListeners() {
                 clickedButton.classList.add('selected');
                 doubleUpPick = gameId;
             }
-            console.log('Current doubleUpPick:', doubleUpPick); // DEBUG
         });
     });
 }
 
-// --- MODIFIED WITH DEBUGGING ---
 savePicksBtn.addEventListener('click', async () => {
-    console.log("%c--- Save Picks button clicked ---", "color: blue; font-size: 1.2em;");
-
-    console.log("1. Checking current user status...");
-    if (!currentUser) {
-        console.error("  -> ERROR: currentUser is null. Aborting save.");
-        return alert('You must be logged in to save picks!');
-    }
-    console.log("  -> OK: User is logged in.", currentUser);
-
+    if (!currentUser) return alert('You must be logged in to save picks!');
     const now = new Date();
     for (const gameId in userPicks) {
         if (userPicks[gameId]) {
             const game = allGames.find(g => g['Game Id'] == gameId);
-            if (getKickoffTimeAsDate(game) < now) {
-                console.error(`  -> ERROR: Game ${gameId} is locked.`);
-                return alert(`Too late! The ${game['Away Display Name']} @ ${game['Home Display Name']} game has already started and is locked.`);
-            }
+            if (getKickoffTimeAsDate(game) < now) { return alert(`Too late! The ${game['Away Display Name']} @ ${game['Home Display Name']} game has already started and is locked.`); }
         }
     }
-    console.log("2. Checking user picks object...");
-    console.log("  -> User Picks:", JSON.parse(JSON.stringify(userPicks)));
-    console.log("  -> Double Up Pick:", doubleUpPick);
-
     const picksToInsert = Object.keys(userPicks).filter(gameId => userPicks[gameId]).map(gameId => ({
         user_id: currentUser.id,
         game_id: parseInt(gameId),
@@ -329,27 +298,15 @@ savePicksBtn.addEventListener('click', async () => {
         is_double_up: gameId === doubleUpPick,
         week: activeWeek
     }));
-    
-    console.log("3. Checking the final data array to be inserted...");
-    console.log("  -> picksToInsert array:", picksToInsert);
-
-    if (picksToInsert.length === 0) {
-        console.warn("  -> WARNING: No picks to insert. Aborting save.");
-        return alert('You haven\'t made any picks yet!');
-    }
-
-    console.log("%c4. Attempting to save to Supabase...", "color: green;");
+    if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
     const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
-    
     if (error) {
-        console.error("  -> SUPABASE ERROR:", error);
+        console.error('Error saving picks:', error);
         alert('Error saving picks: ' + error.message);
     } else {
-        console.log("%c  -> SUCCESS: Picks saved successfully!", "color: green; font-size: 1.1em;");
         alert('Your picks have been saved!');
-        fetchDashboardData();
+        await fetchDashboardData();
     }
-    console.log("%c--- Save Picks process finished ---", "color: blue;");
 });
 
 // =================================================================
@@ -357,20 +314,25 @@ savePicksBtn.addEventListener('click', async () => {
 // =================================================================
 
 async function init() {
+    // 1. Set up the listener for future auth changes (login, logout)
+    supabase.auth.onAuthStateChange((event, session) => {
+        // We only care about live sign-in/out events here; initial session is handled below
+        if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+            handleAuthStateChange(session);
+        }
+    });
+
+    // 2. Load the essential game data
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
     isGameDataLoaded = true;
-    const picksPage = document.getElementById('picks-page');
-    if (picksPage && picksPage.classList.contains('active')) {
-        renderGames(); 
-    }
+
+    // 3. Check for the user's session right now, ONCE.
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-        handleUserLoggedOut();
-    } else {
-        currentUser = session.user;
-        await handleUserLoggedIn();
-    }
+    
+    // 4. Handle the initial state based on the session check.
+    handleAuthStateChange(session);
 }
 
+// Start the application
 init();
