@@ -12,6 +12,9 @@ const supabase = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // --- GOOGLE SHEET DATA ---
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
 
+// --- FIX: Add a state variable to track if game data is loaded ---
+let isGameDataLoaded = false;
+
 let activeWeek = '';
 let allGames = [];
 let userPicks = {};
@@ -235,6 +238,14 @@ function parseCSV(csvText) {
 
 
 function renderGames() {
+    // --- FIX: Check if data is loaded before trying to render games ---
+    if (!isGameDataLoaded) {
+        document.getElementById('picks-page-title').textContent = 'Weekly Picks';
+        gamesContainer.innerHTML = '<p>Loading live game data...</p>';
+        return; // Exit the function early if data isn't ready
+    }
+    // --- END OF FIX ---
+
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
     gamesContainer.innerHTML = '';
@@ -316,11 +327,10 @@ savePicksBtn.addEventListener('click', async () => {
         is_double_up: gameId === doubleUpPick,
         week: activeWeek
     }));
+    if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
     const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
-
     if (error) {
-        // Add this line for better debugging
-        console.error('Error saving picks:', error); 
+        console.error('Error saving picks:', error); // Better for debugging
         alert('Error saving picks: ' + error.message);
     } else {
         alert('Your picks have been saved!');
@@ -335,11 +345,20 @@ savePicksBtn.addEventListener('click', async () => {
 async function init() {
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
+    
+    // --- FIX: Set the flag to true only AFTER data has been fetched ---
+    isGameDataLoaded = true;
+
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         handleUserLoggedOut();
+    } else {
+        // --- FIX: If a user session already exists, manually trigger the logged-in state ---
+        // This ensures the dashboard/picks page can render correctly on first load.
+        // The onAuthStateChange listener will still handle all subsequent sign-in/out events.
+        currentUser = session.user;
+        await handleUserLoggedIn();
     }
-    // onAuthStateChange will handle the logged in case
 }
 
 init();
