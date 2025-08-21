@@ -58,16 +58,11 @@ function determineCurrentWeek(games) {
 // AUTHENTICATION
 // =================================================================
 
-// --- RESTRUCTURED AUTH FLOW ---
-
-// Central function to handle the user's state
 async function handleAuthStateChange(session) {
     if (session) {
-        // User is logged in
         currentUser = session.user;
         updateUserStatusUI();
         await fetchDashboardData();
-        // Determine which page to show
         const currentHash = window.location.hash.substring(1);
         if (currentHash === 'picks') {
             showPage('picks-page');
@@ -75,7 +70,6 @@ async function handleAuthStateChange(session) {
             showPage('home-page');
         }
     } else {
-        // User is logged out
         currentUser = null;
         updateUserStatusUI();
         showPage('auth-page');
@@ -105,7 +99,7 @@ loginForm.addEventListener('submit', async (e) => {
 
 async function logoutUser() {
     await supabase.auth.signOut();
-    currentUser = null; // Explicitly clear the user
+    currentUser = null;
     handleAuthStateChange(null);
 }
 
@@ -122,7 +116,6 @@ function updateUserStatusUI() {
         mainNav.classList.add('hidden');
     }
 }
-// --- END OF RESTRUCTURED AUTH FLOW ---
 
 // =================================================================
 // DASHBOARD & DATA FETCHING
@@ -133,6 +126,23 @@ async function fetchDashboardData() {
     const { data: profile } = await supabase.from('profiles').select('score').eq('id', currentUser.id).single();
     const { data: picks } = await supabase.from('picks').select('*').eq('user_id', currentUser.id);
     renderDashboard(profile, picks);
+}
+
+// --- NEW FUNCTION TO GET PICKS FOR THE CURRENT WEEK ---
+async function fetchUserPicksForWeek(week) {
+    if (!currentUser) return []; // Return empty array if not logged in
+
+    const { data: picks, error } = await supabase
+        .from('picks')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .eq('week', week);
+
+    if (error) {
+        console.error('Error fetching picks for the week:', error);
+        return []; // Return empty on error
+    }
+    return picks;
 }
 
 function renderDashboard(profile, picks) {
@@ -160,7 +170,7 @@ function renderDashboard(profile, picks) {
 
 function showPage(pageId) {
     if (pageId !== 'auth-page' && !currentUser) {
-        showPage('auth-page'); // Failsafe
+        showPage('auth-page');
         return;
     }
     pages.forEach(page => page.classList.remove('active'));
@@ -220,30 +230,53 @@ function parseCSV(csvText) {
     });
 }
 
+// --- MODIFIED TO BE ASYNC AND APPLY SAVED PICKS ---
 async function renderGames() {
     if (!isGameDataLoaded) {
         gamesContainer.innerHTML = '<p>Loading live game data...</p>';
         return;
     }
+
+    // 1. Fetch the user's saved picks for the current active week
+    const savedPicks = await fetchUserPicksForWeek(activeWeek);
+
+    // Reset local state before rendering
+    userPicks = {};
+    doubleUpPick = null;
+
     gamesContainer.innerHTML = ''; // Clear previous games
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
+
     if (weeklyGames.length === 0) {
         gamesContainer.innerHTML = `<p>No games found for ${activeWeek}.</p>`;
         return;
     }
+
     const now = new Date();
     weeklyGames.forEach(game => {
+        const gameId = game['Game Id'];
+        
+        // 2. Check if a saved pick exists for this specific game
+        const savedPick = savedPicks.find(p => p.game_id == gameId);
+
         const gameCard = document.createElement('div');
         gameCard.className = 'game-card';
-        gameCard.dataset.gameId = game['Game Id'];
+        gameCard.dataset.gameId = gameId;
+
         const kickoffTime = getKickoffTimeAsDate(game);
         if (kickoffTime < now) gameCard.classList.add('locked');
+        
         const awayLogo = game['Away Logo'] || '';
         const homeLogo = game['Home Logo'] || '';
         const awayName = game['Away Display Name'] || 'Team';
         const homeName = game['Home Display Name'] || 'Team';
+
+        // 3. Add the saved indicator icon if a pick exists for this game
+        const savedIconHTML = savedPick ? '<div class="saved-indicator" title="Your pick is saved"></div>' : '';
+
         gameCard.innerHTML = `
+            ${savedIconHTML}
             <div class="team" data-team-name="${awayName}"><img src="${awayLogo}" alt="${awayName}"><span class="team-name">${awayName}</span></div>
             <div class="game-separator">@</div>
             <div class="team" data-team-name="${homeName}"><img src="${homeLogo}" alt="${homeName}"><span class="team-name">${homeName}</span></div>
@@ -251,6 +284,19 @@ async function renderGames() {
             <div class="double-up-container"><button class="double-up-btn">Double Up</button></div>
         `;
         gamesContainer.appendChild(gameCard);
+
+        // 4. Apply the 'selected' class and populate state variables if there's a saved pick
+        if (savedPick) {
+            const selectedTeamEl = gameCard.querySelector(`.team[data-team-name="${savedPick.picked_team}"]`);
+            if (selectedTeamEl) {
+                selectedTeamEl.classList.add('selected');
+                userPicks[gameId] = savedPick.picked_team; // Pre-populate for saving
+            }
+            if (savedPick.is_double_up) {
+                gameCard.querySelector('.double-up-btn').classList.add('selected');
+                doubleUpPick = gameId; // Pre-populate for saving
+            }
+        }
     });
     addGameCardEventListeners();
 }
@@ -306,6 +352,7 @@ savePicksBtn.addEventListener('click', async () => {
     } else {
         alert('Your picks have been saved!');
         await fetchDashboardData();
+        renderGames(); // Re-render to show the new lock icons
     }
 });
 
@@ -314,25 +361,16 @@ savePicksBtn.addEventListener('click', async () => {
 // =================================================================
 
 async function init() {
-    // 1. Set up the listener for future auth changes (login, logout)
     supabase.auth.onAuthStateChange((event, session) => {
-        // We only care about live sign-in/out events here; initial session is handled below
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
             handleAuthStateChange(session);
         }
     });
-
-    // 2. Load the essential game data
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
     isGameDataLoaded = true;
-
-    // 3. Check for the user's session right now, ONCE.
     const { data: { session } } = await supabase.auth.getSession();
-    
-    // 4. Handle the initial state based on the session check.
     handleAuthStateChange(session);
 }
 
-// Start the application
 init();
