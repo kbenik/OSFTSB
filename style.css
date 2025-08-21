@@ -37,25 +37,24 @@ header {
 
 nav {
     display: flex;
-    justify-content: space-between;
+    justify-content: space-between; /* This will push the logo/nav to the left and user-status to the right */
     align-items: center;
 }
 
-nav .logo {
-    font-size: 1.5rem;
-    font-weight: bold;
+/* We group the logo and nav together to keep them on the left */
+.logo-nav-group {
+    display: flex;
+    align-items: center;
+    gap: 20px; /* Space between logo and nav links */
 }
 
-/* --- NEW STYLES FOR MAIN NAVIGATION --- */
-/* This correctly positions the main nav links (Dashboard, Picks) */
+
 #main-nav {
-    flex-grow: 1; /* Allows the menu to take up the middle space */
-    display: flex;
-    justify-content: center; /* Centers the links */
-    list-style: none; /* Removes bullet points */
+    display: flex; /* This remains */
+    list-style: none; 
     margin: 0;
     padding: 0;
-    gap: 10px; /* Adjusts space between links */
+    gap: 10px; 
 }
 
 /* This styles the actual links */
