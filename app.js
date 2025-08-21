@@ -12,6 +12,9 @@ const supabase = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // --- GOOGLE SHEET DATA ---
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
 
+// --- GOOGLE SHEET DATA ---
+const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
+
 let activeWeek = '';
 let allGames = [];
 let userPicks = {};
@@ -78,7 +81,7 @@ loginForm.addEventListener('submit', async (e) => {
     if (error) alert('Error logging in: ' + error.message);
 });
 
-// --- FINAL FIX: BULLETPROOF LOGOUT FUNCTION ---
+// --- BULLETPROOF LOGOUT FUNCTION ---
 async function logoutUser() {
     try {
         const { error } = await supabase.auth.signOut();
@@ -88,7 +91,7 @@ async function logoutUser() {
     } catch (e) {
         console.error('Exception during signOut:', e.message);
     } finally {
-        // This block runs NO MATTER WHAT, guaranteeing the UI updates.
+        // This block runs no matter what, guaranteeing the UI updates.
         currentUser = null;
         handleUserLoggedOut();
     }
@@ -117,7 +120,8 @@ function handleUserLoggedOut() {
 
 function updateUserStatusUI() {
     if (currentUser) {
-        const username = currentUser.user_metadata.username || currentUser.email;
+        // Using optional chaining `?.` for safety
+        const username = currentUser?.user_metadata?.username || currentUser?.email;
         userStatusDiv.innerHTML = `
             <span>Welcome, ${username}</span>
             <button id="logout-btn">Logout</button>
@@ -177,14 +181,17 @@ function showPage(pageId) {
     }
 }
 
-// --- FINAL FIX: CONSOLIDATED EVENT LISTENER ON DOCUMENT ---
+// --- FIXED: CONSOLIDATED EVENT LISTENER ON DOCUMENT ---
+// This single event listener handles clicks for navigation and the dynamic logout button.
 document.addEventListener('click', (e) => {
-    // Use .closest() for a more robust check that works even if you click on a child element.
+    // Logout Button handler
     if (e.target.closest('#logout-btn')) {
+        e.preventDefault(); // Good practice to prevent any default browser action
         logoutUser();
         return;
     }
 
+    // Navigation link handler
     const navLink = e.target.closest('.nav-link');
     if (navLink && navLink.closest('header')) {
         e.preventDefault();
@@ -192,6 +199,7 @@ document.addEventListener('click', (e) => {
         showPage(pageId);
     }
     
+    // Logo click handler
     if (e.target.closest('#logo')) {
         if (currentUser) {
             showPage('home-page');
