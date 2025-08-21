@@ -78,10 +78,20 @@ loginForm.addEventListener('submit', async (e) => {
     if (error) alert('Error logging in: ' + error.message);
 });
 
+// --- FINAL FIX: BULLETPROOF LOGOUT FUNCTION ---
 async function logoutUser() {
-    await supabase.auth.signOut();
-    currentUser = null;
-    handleUserLoggedOut(); 
+    try {
+        const { error } = await supabase.auth.signOut();
+        if (error) {
+            console.error('Supabase signOut error:', error.message);
+        }
+    } catch (e) {
+        console.error('Exception during signOut:', e.message);
+    } finally {
+        // This block runs NO MATTER WHAT, guaranteeing the UI updates.
+        currentUser = null;
+        handleUserLoggedOut();
+    }
 }
 
 supabase.auth.onAuthStateChange(async (event, session) => {
@@ -167,27 +177,21 @@ function showPage(pageId) {
     }
 }
 
-// --- FINAL FIX: ATTACH LISTENER TO THE DOCUMENT ---
-// This is more reliable for handling clicks on elements that are dynamically added to the page.
+// --- FINAL FIX: CONSOLIDATED EVENT LISTENER ON DOCUMENT ---
 document.addEventListener('click', (e) => {
-    // 1. Check for a click on the logout button
-    if (e.target.matches('#logout-btn')) {
+    // Use .closest() for a more robust check that works even if you click on a child element.
+    if (e.target.closest('#logout-btn')) {
         logoutUser();
-        return; 
+        return;
     }
 
-    // 2. Check for a click on any navigation link
     const navLink = e.target.closest('.nav-link');
-    if (navLink) {
-        // Ensure the click is inside the header's nav to avoid conflicts
-        if (navLink.closest('header')) {
-            e.preventDefault();
-            const pageId = navLink.getAttribute('href').substring(1) + '-page';
-            showPage(pageId);
-        }
+    if (navLink && navLink.closest('header')) {
+        e.preventDefault();
+        const pageId = navLink.getAttribute('href').substring(1) + '-page';
+        showPage(pageId);
     }
     
-    // 3. Check for a click on the logo
     if (e.target.closest('#logo')) {
         if (currentUser) {
             showPage('home-page');
@@ -309,7 +313,7 @@ savePicksBtn.addEventListener('click', async () => {
     }));
     if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
     const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
-    if (error) {
+    if (.error) {
         alert('Error saving picks: ' + error.message);
     } else {
         alert('Your picks have been saved!');
