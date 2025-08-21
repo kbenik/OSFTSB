@@ -316,9 +316,11 @@ savePicksBtn.addEventListener('click', async () => {
         is_double_up: gameId === doubleUpPick,
         week: activeWeek
     }));
-    if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
     const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
+
     if (error) {
+        // Add this line for better debugging
+        console.error('Error saving picks:', error); 
         alert('Error saving picks: ' + error.message);
     } else {
         alert('Your picks have been saved!');
