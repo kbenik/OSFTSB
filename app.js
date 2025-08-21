@@ -12,9 +12,7 @@ const supabase = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 // --- GOOGLE SHEET DATA ---
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
 
-// --- FIX: Add a state variable to track if game data is loaded ---
-let isGameDataLoaded = false;
-
+let isGameDataLoaded = false; // State variable to track loading
 let activeWeek = '';
 let allGames = [];
 let userPicks = {};
@@ -81,7 +79,6 @@ loginForm.addEventListener('submit', async (e) => {
     if (error) alert('Error logging in: ' + error.message);
 });
 
-// --- BULLETPROOF LOGOUT FUNCTION ---
 async function logoutUser() {
     try {
         const { error } = await supabase.auth.signOut();
@@ -91,7 +88,6 @@ async function logoutUser() {
     } catch (e) {
         console.error('Exception during signOut:', e.message);
     } finally {
-        // This block runs no matter what, guaranteeing the UI updates.
         currentUser = null;
         handleUserLoggedOut();
     }
@@ -120,7 +116,6 @@ function handleUserLoggedOut() {
 
 function updateUserStatusUI() {
     if (currentUser) {
-        // Using optional chaining `?.` for safety
         const username = currentUser?.user_metadata?.username || currentUser?.email;
         userStatusDiv.innerHTML = `
             <span>Welcome, ${username}</span>
@@ -181,32 +176,24 @@ function showPage(pageId) {
     }
 }
 
-// --- FIXED: CONSOLIDATED EVENT LISTENER ON DOCUMENT ---
-// This single event listener handles clicks for navigation and the dynamic logout button.
 document.addEventListener('click', (e) => {
-    // Logout Button handler
     if (e.target.closest('#logout-btn')) {
-        e.preventDefault(); // Good practice to prevent any default browser action
+        e.preventDefault();
         logoutUser();
         return;
     }
-
-    // Navigation link handler
     const navLink = e.target.closest('.nav-link');
     if (navLink && navLink.closest('header')) {
         e.preventDefault();
         const pageId = navLink.getAttribute('href').substring(1) + '-page';
         showPage(pageId);
     }
-    
-    // Logo click handler
     if (e.target.closest('#logo')) {
         if (currentUser) {
             showPage('home-page');
         }
     }
 });
-
 
 async function fetchGameData() {
     try {
@@ -236,15 +223,12 @@ function parseCSV(csvText) {
     });
 }
 
-
 function renderGames() {
-    // --- FIX: Check if data is loaded before trying to render games ---
     if (!isGameDataLoaded) {
         document.getElementById('picks-page-title').textContent = 'Weekly Picks';
         gamesContainer.innerHTML = '<p>Loading live game data...</p>';
-        return; // Exit the function early if data isn't ready
+        return;
     }
-    // --- END OF FIX ---
 
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
@@ -330,7 +314,7 @@ savePicksBtn.addEventListener('click', async () => {
     if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
     const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
     if (error) {
-        console.error('Error saving picks:', error); // Better for debugging
+        console.error('Error saving picks:', error);
         alert('Error saving picks: ' + error.message);
     } else {
         alert('Your picks have been saved!');
@@ -345,17 +329,22 @@ savePicksBtn.addEventListener('click', async () => {
 async function init() {
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
-    
-    // --- FIX: Set the flag to true only AFTER data has been fetched ---
-    isGameDataLoaded = true;
+    isGameDataLoaded = true; // Data is now ready
+
+    // --- NEW: Check if the picks page is active and re-render it ---
+    // This makes the loading dynamic. If the user is on the picks page
+    // while the data loads, this will replace the "Loading..." message
+    // with the game cards automatically.
+    const picksPage = document.getElementById('picks-page');
+    if (picksPage && picksPage.classList.contains('active')) {
+        renderGames(); 
+    }
+    // --- END OF NEW CODE ---
 
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
         handleUserLoggedOut();
     } else {
-        // --- FIX: If a user session already exists, manually trigger the logged-in state ---
-        // This ensures the dashboard/picks page can render correctly on first load.
-        // The onAuthStateChange listener will still handle all subsequent sign-in/out events.
         currentUser = session.user;
         await handleUserLoggedIn();
     }
