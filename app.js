@@ -237,14 +237,11 @@ async function renderGames() {
         return;
     }
 
-    // 1. Fetch the user's saved picks for the current active week
     const savedPicks = await fetchUserPicksForWeek(activeWeek);
-
-    // Reset local state before rendering
     userPicks = {};
     doubleUpPick = null;
 
-    gamesContainer.innerHTML = ''; // Clear previous games
+    gamesContainer.innerHTML = '';
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
 
@@ -256,8 +253,6 @@ async function renderGames() {
     const now = new Date();
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
-        
-        // 2. Check if a saved pick exists for this specific game
         const savedPick = savedPicks.find(p => p.game_id == gameId);
 
         const gameCard = document.createElement('div');
@@ -272,11 +267,9 @@ async function renderGames() {
         const awayName = game['Away Display Name'] || 'Team';
         const homeName = game['Home Display Name'] || 'Team';
 
-        // 3. Add the saved indicator icon if a pick exists for this game
-        const savedIconHTML = savedPick ? '<div class="saved-indicator" title="Your pick is saved"></div>' : '';
-
+        // --- CHANGE: We no longer add the icon here ---
+        // Render the card without the icon initially.
         gameCard.innerHTML = `
-            ${savedIconHTML}
             <div class="team" data-team-name="${awayName}"><img src="${awayLogo}" alt="${awayName}"><span class="team-name">${awayName}</span></div>
             <div class="game-separator">@</div>
             <div class="team" data-team-name="${homeName}"><img src="${homeLogo}" alt="${homeName}"><span class="team-name">${homeName}</span></div>
@@ -285,16 +278,22 @@ async function renderGames() {
         `;
         gamesContainer.appendChild(gameCard);
 
-        // 4. Apply the 'selected' class and populate state variables if there's a saved pick
         if (savedPick) {
             const selectedTeamEl = gameCard.querySelector(`.team[data-team-name="${savedPick.picked_team}"]`);
             if (selectedTeamEl) {
                 selectedTeamEl.classList.add('selected');
-                userPicks[gameId] = savedPick.picked_team; // Pre-populate for saving
+
+                // --- NEW LOGIC: Add the lock icon directly to the picked team ---
+                const savedIcon = document.createElement('div');
+                savedIcon.className = 'saved-indicator';
+                savedIcon.title = 'Your pick is saved';
+                selectedTeamEl.appendChild(savedIcon);
+
+                userPicks[gameId] = savedPick.picked_team;
             }
             if (savedPick.is_double_up) {
                 gameCard.querySelector('.double-up-btn').classList.add('selected');
-                doubleUpPick = gameId; // Pre-populate for saving
+                doubleUpPick = gameId;
             }
         }
     });
