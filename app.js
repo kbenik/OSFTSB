@@ -155,7 +155,7 @@ async function renderScoreboard() {
     const scoreboardBody = document.getElementById('scoreboard-body');
     scoreboardBody.innerHTML = '<tr><td colspan="4">Loading scoreboard...</td></tr>';
     
-    const matchId = 1; 
+    const matchId = 6; 
 
     const { data: scores, error } = await supabase.rpc('get_scoreboard_for_match', { p_match_id: matchId });
 
