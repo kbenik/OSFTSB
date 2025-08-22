@@ -18,6 +18,8 @@
                 <ul id="main-nav" class="hidden">
                     <li><a href="#home" class="nav-link">Dashboard</a></li>
                     <li><a href="#picks" class="nav-link">Picks</a></li>
+                    <li><a href="#scoreboard" class="nav-link">Scoreboard</a></li>
+                    <li><a href="#matches" class="nav-link">Matches</a></li> <!-- ADD THIS LINE -->
                 </ul>
             </div>
     
@@ -75,7 +77,56 @@
                 </table>
             </div>
         </section>
+<!-- Page to list all public matches -->
+<section id="matches-page" class="page">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>Public Matches</h1>
+        <button id="show-create-match-page-btn" class="save-picks-btn" style="width: auto;">Create New Match</button>
+    </div>
+    <div id="matches-list-container">
+        <p>Loading public matches...</p>
+    </div>
+</section>
 
+<!-- Page/Form to create a new match -->
+<section id="create-match-page" class="page">
+    <h1>Create a New Match</h1>
+    <div class="card">
+        <form id="create-match-form" class="auth-form">
+            <h2>Match Details & Rules</h2>
+            <input type="text" id="create-match-name" placeholder="Match Name" required>
+            <input type="password" id="create-match-password" placeholder="Join Password (optional)">
+            
+            <label><input type="checkbox" id="create-match-public" checked> Publicly visible</label>
+            
+            <hr style="margin: 20px 0;">
+            
+            <label>Points for Correct Pick:</label>
+            <input type="number" id="create-win-value" value="1">
+            
+            <label>Points for Incorrect Pick (can be negative):</label>
+            <input type="number" id="create-loss-value" value="0">
+
+            <label>Points for Correct Double Up:</label>
+            <input type="number" id="create-double-up-value" value="2">
+            
+            <label>Minimum Picks Required Per Week:</label>
+            <input type="number" id="create-min-picks" value="3">
+            
+            <label>Number of Double Ups Allowed Per Week:</label>
+            <input type="number" id="create-max-doubles" value="3">
+
+            <hr style="margin: 20px 0;">
+
+            <label><input type="checkbox" id="create-shit-pick-enabled"> Enable "Shit Pick" Bet</label>
+            <label>Points for Correctly Picking Biggest Loser:</label>
+            <input type="number" id="create-shit-pick-value" value="5">
+
+            <button type="submit">Create Match</button>
+            <button type="button" id="cancel-create-match-btn" style="background-color: #666; margin-top: 10px;">Cancel</button>
+        </form>
+    </div>
+</section>
         <!-- Weekly Picks Page -->
         <section id="picks-page" class="page">
             <h1 id="picks-page-title">Weekly Picks</h1>
