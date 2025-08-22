@@ -154,6 +154,128 @@ function renderDashboard(profile, picks) {
         historyBody.appendChild(row);
     });
 }
+// =================================================================
+// MATCHES LOGIC (CREATE, VIEW, JOIN)
+// =================================================================
+
+// Get references to the new buttons
+const showCreateMatchPageBtn = document.getElementById('show-create-match-page-btn');
+const createMatchForm = document.getElementById('create-match-form');
+const cancelCreateMatchBtn = document.getElementById('cancel-create-match-btn');
+
+showCreateMatchPageBtn.addEventListener('click', () => showPage('create-match-page'));
+cancelCreateMatchBtn.addEventListener('click', () => showPage('matches-page'));
+
+// Renders the list of all public matches
+async function renderMatchesPage() {
+    const container = document.getElementById('matches-list-container');
+    container.innerHTML = '<p>Loading public matches...</p>';
+
+    const { data: matches, error } = await supabase
+        .from('matches')
+        .select('id, name, created_by, profiles ( username )') // Fetches the creator's username too!
+        .eq('is_public', true);
+
+    if (error) {
+        console.error("Error fetching matches:", error);
+        container.innerHTML = '<p>Could not load matches.</p>';
+        return;
+    }
+
+    if (matches.length === 0) {
+        container.innerHTML = '<p>No public matches found. Why not create one?</p>';
+        return;
+    }
+
+    container.innerHTML = ''; // Clear loading message
+    matches.forEach(match => {
+        const card = document.createElement('div');
+        card.className = 'card'; // Reuse the card style
+        card.innerHTML = `
+            <h3>${match.name}</h3>
+            <p>Created by: ${match.profiles.username || 'A user'}</p>
+            <button class="join-match-btn" data-match-id="${match.id}" data-match-name="${match.name}">Join Match</button>
+        `;
+        container.appendChild(card);
+    });
+}
+
+// Handle the form submission to create a new match
+createMatchForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!currentUser) return alert("You must be logged in to create a match.");
+
+    const matchData = {
+        name: document.getElementById('create-match-name').value,
+        password: document.getElementById('create-match-password').value,
+        is_public: document.getElementById('create-match-public').checked,
+        win_value: parseInt(document.getElementById('create-win-value').value),
+        loss_value: parseInt(document.getElementById('create-loss-value').value),
+        double_up_value: parseInt(document.getElementById('create-double-up-value').value),
+        min_picks_per_week: parseInt(document.getElementById('create-min-picks').value),
+        max_double_ups_per_week: parseInt(document.getElementById('create-max-doubles').value),
+        shit_pick_enabled: document.getElementById('create-shit-pick-enabled').checked,
+        shit_pick_value: parseInt(document.getElementById('create-shit-pick-value').value),
+        created_by: currentUser.id
+    };
+
+    // 1. Insert the new match into the 'matches' table
+    const { data: newMatch, error: createMatchError } = await supabase
+        .from('matches')
+        .insert(matchData)
+        .select()
+        .single(); // .select().single() returns the newly created row
+
+    if (createMatchError) {
+        console.error("Error creating match:", createMatchError);
+        return alert("Failed to create match: " + createMatchError.message);
+    }
+
+    // 2. Automatically add the creator to the 'match_members' table
+    const { error: joinError } = await supabase
+        .from('match_members')
+        .insert({
+            match_id: newMatch.id,
+            user_id: currentUser.id
+        });
+    
+    if (joinError) {
+        // This is a bit awkward, but we should inform the user
+        console.error("Error adding creator to match:", joinError);
+        return alert("Match created, but failed to add you as a member. Please try joining manually.");
+    }
+
+    alert(`Successfully created the match "${newMatch.name}"!`);
+    showPage('matches-page'); // Go back to the list
+});
+
+
+// Add an event listener to the container to handle clicks on the dynamic "Join" buttons
+document.getElementById('matches-list-container').addEventListener('click', async (e) => {
+    if (e.target.classList.contains('join-match-btn')) {
+        if (!currentUser) return alert("You must be logged in to join a match.");
+
+        const matchId = e.target.dataset.matchId;
+        const matchName = e.target.dataset.matchName;
+        const password = prompt(`Enter the password to join "${matchName}":`);
+
+        if (password === null) return; // User cancelled the prompt
+
+        // We will use a secure RPC call to handle the join logic
+        const { error } = await supabase.rpc('join_match', {
+            p_match_id: matchId,
+            p_password: password
+        });
+
+        if (error) {
+            console.error("Error joining match:", error);
+            alert("Failed to join match: " + error.message);
+        } else {
+            alert(`Successfully joined "${matchName}"!`);
+            // You might want to refresh the scoreboard or other relevant data here
+        }
+    }
+});
 
 // =================================================================
 // PAGE NAVIGATION & PICKS LOGIC
@@ -168,6 +290,9 @@ function showPage(pageId) {
     if (activePage) activePage.classList.add('active');
     if (pageId === 'picks-page') {
         renderGames();
+    if (pageId === 'matches-page') {
+        renderMatchesPage();
+    }
     }
 }
 
