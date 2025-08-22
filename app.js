@@ -16,7 +16,8 @@ let isGameDataLoaded = false;
 let activeWeek = '';
 let allGames = [];
 let userPicks = {};
-let doubleUpPick = null;
+// --- MODIFIED: Changed from a single value to an array to support multiple double-ups ---
+let doubleUpPicks = []; 
 let currentUser = null;
 
 // =================================================================
@@ -128,19 +129,12 @@ async function fetchDashboardData() {
     renderDashboard(profile, picks);
 }
 
-// --- NEW FUNCTION TO GET PICKS FOR THE CURRENT WEEK ---
 async function fetchUserPicksForWeek(week) {
-    if (!currentUser) return []; // Return empty array if not logged in
-
-    const { data: picks, error } = await supabase
-        .from('picks')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .eq('week', week);
-
+    if (!currentUser) return [];
+    const { data: picks, error } = await supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('week', week);
     if (error) {
         console.error('Error fetching picks for the week:', error);
-        return []; // Return empty on error
+        return [];
     }
     return picks;
 }
@@ -176,7 +170,6 @@ function showPage(pageId) {
     pages.forEach(page => page.classList.remove('active'));
     const activePage = document.getElementById(pageId);
     if (activePage) activePage.classList.add('active');
-
     if (pageId === 'picks-page') {
         renderGames();
     }
@@ -230,45 +223,36 @@ function parseCSV(csvText) {
     });
 }
 
-// --- MODIFIED TO BE ASYNC AND APPLY SAVED PICKS ---
 async function renderGames() {
     if (!isGameDataLoaded) {
         gamesContainer.innerHTML = '<p>Loading live game data...</p>';
         return;
     }
-
     const savedPicks = await fetchUserPicksForWeek(activeWeek);
     userPicks = {};
-    doubleUpPick = null;
+    // --- MODIFIED: Reset the array for pre-population ---
+    doubleUpPicks = [];
 
     gamesContainer.innerHTML = '';
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
-
     if (weeklyGames.length === 0) {
         gamesContainer.innerHTML = `<p>No games found for ${activeWeek}.</p>`;
         return;
     }
-
     const now = new Date();
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
         const savedPick = savedPicks.find(p => p.game_id == gameId);
-
         const gameCard = document.createElement('div');
         gameCard.className = 'game-card';
         gameCard.dataset.gameId = gameId;
-
         const kickoffTime = getKickoffTimeAsDate(game);
         if (kickoffTime < now) gameCard.classList.add('locked');
-        
         const awayLogo = game['Away Logo'] || '';
         const homeLogo = game['Home Logo'] || '';
         const awayName = game['Away Display Name'] || 'Team';
         const homeName = game['Home Display Name'] || 'Team';
-
-        // --- CHANGE: We no longer add the icon here ---
-        // Render the card without the icon initially.
         gameCard.innerHTML = `
             <div class="team" data-team-name="${awayName}"><img src="${awayLogo}" alt="${awayName}"><span class="team-name">${awayName}</span></div>
             <div class="game-separator">@</div>
@@ -282,18 +266,16 @@ async function renderGames() {
             const selectedTeamEl = gameCard.querySelector(`.team[data-team-name="${savedPick.picked_team}"]`);
             if (selectedTeamEl) {
                 selectedTeamEl.classList.add('selected');
-
-                // --- NEW LOGIC: Add the lock icon directly to the picked team ---
                 const savedIcon = document.createElement('div');
                 savedIcon.className = 'saved-indicator';
                 savedIcon.title = 'Your pick is saved';
                 selectedTeamEl.appendChild(savedIcon);
-
                 userPicks[gameId] = savedPick.picked_team;
             }
             if (savedPick.is_double_up) {
                 gameCard.querySelector('.double-up-btn').classList.add('selected');
-                doubleUpPick = gameId;
+                // --- MODIFIED: Add the game ID to the doubleUpPicks array ---
+                doubleUpPicks.push(gameId);
             }
         }
     });
@@ -311,17 +293,23 @@ function addGameCardEventListeners() {
                 userPicks[gameId] = team.classList.contains('selected') ? team.dataset.teamName : undefined;
             });
         });
+
+        // --- NEW LOGIC: Toggle behavior for multiple double-up selections ---
         card.querySelector('.double-up-btn').addEventListener('click', (e) => {
             const clickedButton = e.currentTarget;
-            const wasAlreadySelected = clickedButton.classList.contains('selected');
-            document.querySelectorAll('.double-up-btn.selected').forEach(btn => {
-                btn.classList.remove('selected');
-            });
-            if (wasAlreadySelected) {
-                doubleUpPick = null;
+            const gameId = card.dataset.gameId;
+
+            // Toggle the visual 'selected' state of the button
+            clickedButton.classList.toggle('selected');
+
+            if (clickedButton.classList.contains('selected')) {
+                // If it's now selected, add it to our array
+                if (!doubleUpPicks.includes(gameId)) {
+                    doubleUpPicks.push(gameId);
+                }
             } else {
-                clickedButton.classList.add('selected');
-                doubleUpPick = gameId;
+                // If it's now unselected, remove it from our array
+                doubleUpPicks = doubleUpPicks.filter(id => id !== gameId);
             }
         });
     });
@@ -329,6 +317,13 @@ function addGameCardEventListeners() {
 
 savePicksBtn.addEventListener('click', async () => {
     if (!currentUser) return alert('You must be logged in to save picks!');
+
+    // --- NEW LOGIC: Validation for a minimum of 3 picks ---
+    const validPicksCount = Object.values(userPicks).filter(pick => pick !== undefined).length;
+    if (validPicksCount < 3) {
+        return alert('You must make at least 3 picks before saving.');
+    }
+    
     const now = new Date();
     for (const gameId in userPicks) {
         if (userPicks[gameId]) {
@@ -340,10 +335,12 @@ savePicksBtn.addEventListener('click', async () => {
         user_id: currentUser.id,
         game_id: parseInt(gameId),
         picked_team: userPicks[gameId],
-        is_double_up: gameId === doubleUpPick,
+        // --- MODIFIED: Check if the gameId is in our new array ---
+        is_double_up: doubleUpPicks.includes(gameId),
         week: activeWeek
     }));
     if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
+    
     const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
     if (error) {
         console.error('Error saving picks:', error);
@@ -351,7 +348,7 @@ savePicksBtn.addEventListener('click', async () => {
     } else {
         alert('Your picks have been saved!');
         await fetchDashboardData();
-        renderGames(); // Re-render to show the new lock icons
+        renderGames();
     }
 });
 
