@@ -256,7 +256,6 @@ createMatchForm.addEventListener('submit', async (e) => {
         is_public: document.getElementById('create-match-public').checked,
         win_value: parseInt(document.getElementById('create-win-value').value),
         loss_value: parseInt(document.getElementById('create-loss-value').value),
-        double_up_value: parseInt(document.getElementById('create-double-up-value').value),
         min_picks_per_week: parseInt(document.getElementById('create-min-picks').value),
         max_double_ups_per_week: parseInt(document.getElementById('create-max-doubles').value),
         shit_pick_enabled: document.getElementById('create-shit-pick-enabled').checked,
