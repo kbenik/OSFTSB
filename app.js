@@ -17,8 +17,6 @@ let allGames = [];
 let userPicks = {};
 let doubleUpPicks = [];
 let currentUser = null;
-
-// --- NEW STATE VARIABLE: To track what was initially saved ---
 let initiallySavedPicks = new Set();
 
 // =================================================================
@@ -133,6 +131,7 @@ async function fetchUserPicksForWeek(week) {
     return picks;
 }
 
+// --- MODIFIED: Added fire emoji for double-up picks ---
 function renderDashboard(profile, picks) {
     document.getElementById('user-score').textContent = profile?.score || 0;
     const historyBody = document.getElementById('pick-history-body');
@@ -146,8 +145,12 @@ function renderDashboard(profile, picks) {
         const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID: ${pick.game_id}`;
         const result = pick.is_correct === null ? 'Pending' : (pick.is_correct ? 'Correct' : 'Incorrect');
         const points = 'TBD';
+        
+        // Check if the pick is a double-up and create the indicator string
+        const doubleUpIndicator = pick.is_double_up ? ' 🔥' : '';
+
         const row = document.createElement('tr');
-        row.innerHTML = `<td>${gameName} (${pick.week})</td><td>${pick.picked_team} ${pick.is_double_up ? '<strong>(2x)</strong>' : ''}</td><td>${result}</td><td>${points}</td>`;
+        row.innerHTML = `<td>${gameName} (${pick.week})</td><td>${pick.picked_team}${doubleUpIndicator}</td><td>${result}</td><td>${points}</td>`;
         historyBody.appendChild(row);
     });
 }
@@ -216,18 +219,15 @@ function parseCSV(csvText) {
     });
 }
 
-// --- MODIFIED to use the new state tracking ---
 async function renderGames() {
     if (!isGameDataLoaded) {
         gamesContainer.innerHTML = '<p>Loading live game data...</p>';
         return;
     }
     const savedPicks = await fetchUserPicksForWeek(activeWeek);
-    
-    // Reset all state variables before rendering
     userPicks = {};
     doubleUpPicks = [];
-    initiallySavedPicks = new Set(); // Use a Set for efficient lookups
+    initiallySavedPicks = new Set();
 
     gamesContainer.innerHTML = '';
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
@@ -242,9 +242,8 @@ async function renderGames() {
         const gameId = game['Game Id'];
         const savedPick = savedPicks.find(p => p.game_id == gameId);
         
-        // Populate our state from the database
         if (savedPick) {
-            initiallySavedPicks.add(gameId); // Add to our "memory" of saved picks
+            initiallySavedPicks.add(gameId);
             userPicks[gameId] = savedPick.picked_team;
             if (savedPick.is_double_up) {
                 doubleUpPicks.push(gameId);
@@ -264,14 +263,15 @@ async function renderGames() {
             <div class="game-separator">@</div>
             <div class="team" data-team-name="${homeName}"><img src="${game['Home Logo'] || ''}" alt="${homeName}"><span class="team-name">${homeName}</span></div>
             <div class="game-info">${getKickoffTimeAsDate(game).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
-            <div class="double-up-container"><button class="double-up-btn">Double Up</button></div>
+            <div class="double-up-container"><button class="double-up-btn" disabled>Double Up</button></div>
         `;
         
-        // Apply the visual state AFTER creating the card
+        const doubleUpBtn = gameCard.querySelector('.double-up-btn');
         if (userPicks[gameId]) {
             const selectedTeamEl = gameCard.querySelector(`.team[data-team-name="${userPicks[gameId]}"]`);
             if (selectedTeamEl) {
                 selectedTeamEl.classList.add('selected');
+                doubleUpBtn.disabled = false; // Enable the button since a pick is pre-selected
                 const savedIcon = document.createElement('div');
                 savedIcon.className = 'saved-indicator';
                 savedIcon.title = 'Your pick is saved';
@@ -279,7 +279,7 @@ async function renderGames() {
             }
         }
         if (doubleUpPicks.includes(gameId)) {
-            gameCard.querySelector('.double-up-btn').classList.add('selected');
+            doubleUpBtn.classList.add('selected');
         }
 
         gamesContainer.appendChild(gameCard);
@@ -287,33 +287,35 @@ async function renderGames() {
     addGameCardEventListeners();
 }
 
-// --- MODIFIED event listener logic ---
+// --- MODIFIED: Added logic to enable/disable the Double Up button ---
 function addGameCardEventListeners() {
     document.querySelectorAll('.game-card').forEach(card => {
         const gameId = card.dataset.gameId;
+        const doubleUpBtn = card.querySelector('.double-up-btn');
 
         card.querySelectorAll('.team').forEach(team => {
             team.addEventListener('click', (e) => {
                 const clickedTeam = e.currentTarget;
                 const wasAlreadySelected = clickedTeam.classList.contains('selected');
 
-                // Clear all selections and icons within this game card first
                 card.querySelectorAll('.team').forEach(t => t.classList.remove('selected'));
                 const existingIcon = card.querySelector('.saved-indicator');
                 if (existingIcon) existingIcon.remove();
 
                 if (wasAlreadySelected) {
-                    // If it was selected, deselect it and mark for deletion
                     userPicks[gameId] = undefined;
+                    doubleUpBtn.disabled = true; // Disable button on deselect
+                    doubleUpBtn.classList.remove('selected'); // Unselect double up on deselect
+                    doubleUpPicks = doubleUpPicks.filter(id => id !== gameId); // Remove from state
                 } else {
-                    // If it was not selected, select it
                     clickedTeam.classList.add('selected');
                     userPicks[gameId] = clickedTeam.dataset.teamName;
+                    doubleUpBtn.disabled = false; // Enable button on select
                 }
             });
         });
 
-        card.querySelector('.double-up-btn').addEventListener('click', (e) => {
+        doubleUpBtn.addEventListener('click', (e) => {
             const clickedButton = e.currentTarget;
             clickedButton.classList.toggle('selected');
             if (clickedButton.classList.contains('selected')) {
@@ -325,15 +327,12 @@ function addGameCardEventListeners() {
     });
 }
 
-// --- MODIFIED save logic using the new state tracking ---
 savePicksBtn.addEventListener('click', async () => {
     if (!currentUser) return alert('You must be logged in to save picks!');
-
     const validPicksCount = Object.values(userPicks).filter(pick => pick !== undefined).length;
     if (validPicksCount < 3) {
         return alert('You must make at least 3 picks before saving.');
     }
-
     const now = new Date();
     for (const gameId in userPicks) {
         if (userPicks[gameId]) {
@@ -342,7 +341,6 @@ savePicksBtn.addEventListener('click', async () => {
         }
     }
     
-    // 1. Determine picks to UPSERT (new or changed)
     const picksToUpsert = Object.keys(userPicks)
         .filter(gameId => userPicks[gameId] !== undefined)
         .map(gameId => ({
@@ -352,8 +350,6 @@ savePicksBtn.addEventListener('click', async () => {
             is_double_up: doubleUpPicks.includes(gameId),
             week: activeWeek
         }));
-
-    // 2. Determine picks to DELETE by comparing current state to initial state
     const picksToDelete = [];
     for (const gameId of initiallySavedPicks) {
         if (userPicks[gameId] === undefined) {
@@ -366,16 +362,13 @@ savePicksBtn.addEventListener('click', async () => {
             const { error: upsertError } = await supabase.from('picks').upsert(picksToUpsert, { onConflict: 'user_id, game_id' });
             if (upsertError) throw upsertError;
         }
-
         if (picksToDelete.length > 0) {
             const { error: deleteError } = await supabase.from('picks').delete().eq('user_id', currentUser.id).in('game_id', picksToDelete);
             if (deleteError) throw deleteError;
         }
-
         alert('Your picks have been saved!');
         await fetchDashboardData();
         renderGames();
-
     } catch (error) {
         console.error('Error saving picks:', error);
         alert('Error saving picks: ' + error.message);
