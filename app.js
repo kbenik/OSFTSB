@@ -200,25 +200,59 @@ if (cancelCreateMatchBtn) cancelCreateMatchBtn.addEventListener('click', () => s
 async function renderMatchesPage() {
     const container = document.getElementById('matches-list-container');
     container.innerHTML = '<p>Loading public matches...</p>';
-    const { data: matches, error } = await supabase.from('matches').select('id, name, created_by, profiles ( username )').eq('is_public', true);
+
+    // 1. Get the list of IDs for matches the current user is already in
+    const { data: userMemberships, error: memberError } = await supabase
+        .from('match_members')
+        .select('match_id')
+        .eq('user_id', currentUser.id);
+
+    if (memberError) {
+        console.error("Error fetching user memberships:", memberError);
+        // We can still proceed, but the join buttons might not hide correctly
+    }
+    const joinedMatchIds = new Set(userMemberships.map(m => m.match_id));
+
+    // 2. Get all public matches
+    const { data: matches, error } = await supabase
+        .from('matches')
+        .select('id, name, created_by, profiles ( username )')
+        .eq('is_public', true);
+
     if (error) {
         console.error("Error fetching matches:", error);
         container.innerHTML = '<p>Could not load matches.</p>';
         return;
     }
+
     if (matches.length === 0) {
         container.innerHTML = '<p>No public matches found. Why not create one?</p>';
         return;
     }
+
     container.innerHTML = '';
     matches.forEach(match => {
         const card = document.createElement('div');
         card.className = 'card';
-        card.innerHTML = `<h3>${match.name}</h3><p>Created by: ${match.profiles.username || 'A user'}</p><button class="join-match-btn" data-match-id="${match.id}" data-match-name="${match.name}">Join Match</button>`;
+
+        // 3. Decide whether to show the "Join" button or a "Joined" message
+        let buttonOrMessage;
+        if (joinedMatchIds.has(match.id)) {
+            // If the user is a member, show a disabled "Joined" button
+            buttonOrMessage = `<button class="join-match-btn" disabled style="background-color: #666;">Joined</button>`;
+        } else {
+            // Otherwise, show the active "Join Match" button
+            buttonOrMessage = `<button class="join-match-btn" data-match-id="${match.id}" data-match-name="${match.name}">Join Match</button>`;
+        }
+
+        card.innerHTML = `
+            <h3>${match.name}</h3>
+            <p>Created by: ${match.profiles.username || 'A user'}</p>
+            ${buttonOrMessage}
+        `;
         container.appendChild(card);
     });
 }
-
 createMatchForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentUser) return alert("You must be logged in to create a match.");
