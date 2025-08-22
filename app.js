@@ -201,57 +201,68 @@ async function renderMatchesPage() {
     const container = document.getElementById('matches-list-container');
     container.innerHTML = '<p>Loading public matches...</p>';
 
-    // 1. Get the list of IDs for matches the current user is already in
-    const { data: userMemberships, error: memberError } = await supabase
-        .from('match_members')
-        .select('match_id')
-        .eq('user_id', currentUser.id);
+    try {
+        // --- STEP 1: Fetch all public matches (simple query) ---
+        const { data: matches, error: matchesError } = await supabase
+            .from('matches')
+            .select('id, name, created_by')
+            .eq('is_public', true);
+        
+        if (matchesError) throw matchesError;
 
-    if (memberError) {
-        console.error("Error fetching user memberships:", memberError);
-        // We can still proceed, but the join buttons might not hide correctly
-    }
-    const joinedMatchIds = new Set(userMemberships.map(m => m.match_id));
+        // --- STEP 2: Fetch all user profiles (simple query) ---
+        // We do this separately to avoid the complex join that was failing.
+        const { data: profiles, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, username');
 
-    // 2. Get all public matches
-    const { data: matches, error } = await supabase
-        .from('matches')
-        .select('id, name, created_by, profiles ( username )')
-        .eq('is_public', true);
+        if (profilesError) throw profilesError;
 
-    if (error) {
-        console.error("Error fetching matches:", error);
-        container.innerHTML = '<p>Could not load matches.</p>';
-        return;
-    }
+        // Create a simple lookup map for usernames { 'user_id': 'username' }
+        const profilesMap = new Map(profiles.map(p => [p.id, p.username]));
 
-    if (matches.length === 0) {
-        container.innerHTML = '<p>No public matches found. Why not create one?</p>';
-        return;
-    }
+        // --- STEP 3: Fetch the user's current memberships ---
+        const { data: userMemberships, error: memberError } = await supabase
+            .from('match_members')
+            .select('match_id')
+            .eq('user_id', currentUser.id);
 
-    container.innerHTML = '';
-    matches.forEach(match => {
-        const card = document.createElement('div');
-        card.className = 'card';
+        if (memberError) throw memberError;
+        const joinedMatchIds = new Set(userMemberships.map(m => m.match_id));
 
-        // 3. Decide whether to show the "Join" button or a "Joined" message
-        let buttonOrMessage;
-        if (joinedMatchIds.has(match.id)) {
-            // If the user is a member, show a disabled "Joined" button
-            buttonOrMessage = `<button class="join-match-btn" disabled style="background-color: #666;">Joined</button>`;
-        } else {
-            // Otherwise, show the active "Join Match" button
-            buttonOrMessage = `<button class="join-match-btn" data-match-id="${match.id}" data-match-name="${match.name}">Join Match</button>`;
+        // --- STEP 4: Render the UI ---
+        if (matches.length === 0) {
+            container.innerHTML = '<p>No public matches found. Why not create one?</p>';
+            return;
         }
 
-        card.innerHTML = `
-            <h3>${match.name}</h3>
-            <p>Created by: ${match.profiles.username || 'A user'}</p>
-            ${buttonOrMessage}
-        `;
-        container.appendChild(card);
-    });
+        container.innerHTML = '';
+        matches.forEach(match => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            // Get the creator's username from our map
+            const creatorUsername = profilesMap.get(match.created_by) || 'A user';
+
+            let buttonOrMessage;
+            if (joinedMatchIds.has(match.id)) {
+                buttonOrMessage = `<button class="join-match-btn" disabled style="background-color: #666;">Joined</button>`;
+            } else {
+                buttonOrMessage = `<button class="join-match-btn" data-match-id="${match.id}" data-match-name="${match.name}">Join Match</button>`;
+            }
+
+            card.innerHTML = `
+                <h3>${match.name}</h3>
+                <p>Created by: ${creatorUsername}</p>
+                ${buttonOrMessage}
+            `;
+            container.appendChild(card);
+        });
+
+    } catch (error) {
+        console.error("Error loading matches page:", error);
+        container.innerHTML = '<p>Could not load matches due to an error. Check the console.</p>';
+    }
 }
 createMatchForm.addEventListener('submit', async (e) => {
     e.preventDefault();
