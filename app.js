@@ -61,8 +61,8 @@ async function handleAuthStateChange(session) {
         updateUserStatusUI();
         await fetchDashboardData();
         const currentHash = window.location.hash.substring(1);
-        if (currentHash === 'picks') {
-            showPage('picks-page');
+        if (currentHash && document.getElementById(currentHash + '-page')) {
+            showPage(currentHash + '-page');
         } else {
             showPage('home-page');
         }
@@ -131,7 +131,6 @@ async function fetchUserPicksForWeek(week) {
     return picks;
 }
 
-// --- MODIFIED: Added fire emoji for double-up picks ---
 function renderDashboard(profile, picks) {
     document.getElementById('user-score').textContent = profile?.score || 0;
     const historyBody = document.getElementById('pick-history-body');
@@ -145,21 +144,17 @@ function renderDashboard(profile, picks) {
         const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID: ${pick.game_id}`;
         const result = pick.is_correct === null ? 'Pending' : (pick.is_correct ? 'Correct' : 'Incorrect');
         const points = 'TBD';
-        
-        // Check if the pick is a double-up and create the indicator string
         const doubleUpIndicator = pick.is_double_up ? ' 🔥' : '';
-
         const row = document.createElement('tr');
         row.innerHTML = `<td>${gameName} (${pick.week})</td><td>${pick.picked_team}${doubleUpIndicator}</td><td>${result}</td><td>${points}</td>`;
         historyBody.appendChild(row);
     });
 }
+
 async function renderScoreboard() {
     const scoreboardBody = document.getElementById('scoreboard-body');
     scoreboardBody.innerHTML = '<tr><td colspan="4">Loading scoreboard...</td></tr>';
     
-    // For now, we'll hardcode the match ID to 1 for testing.
-    // In the future, you could get this from a dropdown or user selection.
     const matchId = 1; 
 
     const { data: scores, error } = await supabase.rpc('get_scoreboard_for_match', { p_match_id: matchId });
@@ -175,81 +170,58 @@ async function renderScoreboard() {
         return;
     }
 
-    scoreboardBody.innerHTML = ''; // Clear loading message
-    const moneyPerPoint = 5; // Example value: $5 per point
+    scoreboardBody.innerHTML = '';
+    const moneyPerPoint = 5;
 
     scores.forEach((player, index) => {
         const rank = index + 1;
         let moneyOwed = '-';
-
-        // Calculate the money owed to the person directly above in the rankings
         if (index > 0) {
             const personAbove = scores[index - 1];
             const pointDifference = personAbove.score - player.score;
             moneyOwed = `$${pointDifference * moneyPerPoint}`;
         }
-
         const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${rank}</td>
-            <td>${player.username}</td>
-            <td>${player.score}</td>
-            <td>${moneyOwed}</td>
-        `;
+        row.innerHTML = `<td>${rank}</td><td>${player.username}</td><td>${player.score}</td><td>${moneyOwed}</td>`;
         scoreboardBody.appendChild(row);
     });
 }
+
 // =================================================================
 // MATCHES LOGIC (CREATE, VIEW, JOIN)
 // =================================================================
-
-// Get references to the new buttons
 const showCreateMatchPageBtn = document.getElementById('show-create-match-page-btn');
 const createMatchForm = document.getElementById('create-match-form');
 const cancelCreateMatchBtn = document.getElementById('cancel-create-match-btn');
 
-showCreateMatchPageBtn.addEventListener('click', () => showPage('create-match-page'));
-cancelCreateMatchBtn.addEventListener('click', () => showPage('matches-page'));
+if (showCreateMatchPageBtn) showCreateMatchPageBtn.addEventListener('click', () => showPage('create-match-page'));
+if (cancelCreateMatchBtn) cancelCreateMatchBtn.addEventListener('click', () => showPage('matches-page'));
 
-// Renders the list of all public matches
 async function renderMatchesPage() {
     const container = document.getElementById('matches-list-container');
     container.innerHTML = '<p>Loading public matches...</p>';
-
-    const { data: matches, error } = await supabase
-        .from('matches')
-        .select('id, name, created_by, profiles ( username )') // Fetches the creator's username too!
-        .eq('is_public', true);
-
+    const { data: matches, error } = await supabase.from('matches').select('id, name, created_by, profiles ( username )').eq('is_public', true);
     if (error) {
         console.error("Error fetching matches:", error);
         container.innerHTML = '<p>Could not load matches.</p>';
         return;
     }
-
     if (matches.length === 0) {
         container.innerHTML = '<p>No public matches found. Why not create one?</p>';
         return;
     }
-
-    container.innerHTML = ''; // Clear loading message
+    container.innerHTML = '';
     matches.forEach(match => {
         const card = document.createElement('div');
-        card.className = 'card'; // Reuse the card style
-        card.innerHTML = `
-            <h3>${match.name}</h3>
-            <p>Created by: ${match.profiles.username || 'A user'}</p>
-            <button class="join-match-btn" data-match-id="${match.id}" data-match-name="${match.name}">Join Match</button>
-        `;
+        card.className = 'card';
+        card.innerHTML = `<h3>${match.name}</h3><p>Created by: ${match.profiles.username || 'A user'}</p><button class="join-match-btn" data-match-id="${match.id}" data-match-name="${match.name}">Join Match</button>`;
         container.appendChild(card);
     });
 }
 
-// Handle the form submission to create a new match
 createMatchForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     if (!currentUser) return alert("You must be logged in to create a match.");
-
     const matchData = {
         name: document.getElementById('create-match-name').value,
         password: document.getElementById('create-match-password').value,
@@ -262,61 +234,33 @@ createMatchForm.addEventListener('submit', async (e) => {
         shit_pick_value: parseInt(document.getElementById('create-shit-pick-value').value),
         created_by: currentUser.id
     };
-
-    // 1. Insert the new match into the 'matches' table
-    const { data: newMatch, error: createMatchError } = await supabase
-        .from('matches')
-        .insert(matchData)
-        .select()
-        .single(); // .select().single() returns the newly created row
-
+    const { data: newMatch, error: createMatchError } = await supabase.from('matches').insert(matchData).select().single();
     if (createMatchError) {
         console.error("Error creating match:", createMatchError);
         return alert("Failed to create match: " + createMatchError.message);
     }
-
-    // 2. Automatically add the creator to the 'match_members' table
-    const { error: joinError } = await supabase
-        .from('match_members')
-        .insert({
-            match_id: newMatch.id,
-            user_id: currentUser.id
-        });
-    
+    const { error: joinError } = await supabase.from('match_members').insert({ match_id: newMatch.id, user_id: currentUser.id });
     if (joinError) {
-        // This is a bit awkward, but we should inform the user
         console.error("Error adding creator to match:", joinError);
         return alert("Match created, but failed to add you as a member. Please try joining manually.");
     }
-
     alert(`Successfully created the match "${newMatch.name}"!`);
-    showPage('matches-page'); // Go back to the list
+    showPage('matches-page');
 });
 
-
-// Add an event listener to the container to handle clicks on the dynamic "Join" buttons
 document.getElementById('matches-list-container').addEventListener('click', async (e) => {
     if (e.target.classList.contains('join-match-btn')) {
         if (!currentUser) return alert("You must be logged in to join a match.");
-
         const matchId = e.target.dataset.matchId;
         const matchName = e.target.dataset.matchName;
         const password = prompt(`Enter the password to join "${matchName}":`);
-
-        if (password === null) return; // User cancelled the prompt
-
-        // We will use a secure RPC call to handle the join logic
-        const { error } = await supabase.rpc('join_match', {
-            p_match_id: matchId,
-            p_password: password
-        });
-
+        if (password === null) return;
+        const { error } = await supabase.rpc('join_match', { p_match_id: matchId, p_password: password });
         if (error) {
             console.error("Error joining match:", error);
             alert("Failed to join match: " + error.message);
         } else {
             alert(`Successfully joined "${matchName}"!`);
-            // You might want to refresh the scoreboard or other relevant data here
         }
     }
 });
@@ -332,15 +276,9 @@ function showPage(pageId) {
     pages.forEach(page => page.classList.remove('active'));
     const activePage = document.getElementById(pageId);
     if (activePage) activePage.classList.add('active');
-    if (pageId === 'picks-page') {
-        renderGames();
-    }
-    if (pageId === 'matches-page') {
-        renderMatchesPage();
-    }
-        if (pageId === 'scoreboard-page') {
-        renderScoreboard();
-    }
+    if (pageId === 'picks-page') renderGames();
+    if (pageId === 'matches-page') renderMatchesPage();
+    if (pageId === 'scoreboard-page') renderScoreboard();
 }
 
 document.addEventListener('click', (e) => {
@@ -400,7 +338,6 @@ async function renderGames() {
     userPicks = {};
     doubleUpPicks = [];
     initiallySavedPicks = new Set();
-
     gamesContainer.innerHTML = '';
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
@@ -408,85 +345,63 @@ async function renderGames() {
         gamesContainer.innerHTML = `<p>No games found for ${activeWeek}.</p>`;
         return;
     }
-    
     const now = new Date();
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
         const savedPick = savedPicks.find(p => p.game_id == gameId);
-        
         if (savedPick) {
             initiallySavedPicks.add(gameId);
             userPicks[gameId] = savedPick.picked_team;
-            if (savedPick.is_double_up) {
-                doubleUpPicks.push(gameId);
-            }
+            if (savedPick.is_double_up) doubleUpPicks.push(gameId);
         }
-
         const gameCard = document.createElement('div');
         gameCard.className = 'game-card';
         gameCard.dataset.gameId = gameId;
         if (getKickoffTimeAsDate(game) < now) gameCard.classList.add('locked');
-        
         const awayName = game['Away Display Name'] || 'Team';
         const homeName = game['Home Display Name'] || 'Team';
-
-        gameCard.innerHTML = `
-            <div class="team" data-team-name="${awayName}"><img src="${game['Away Logo'] || ''}" alt="${awayName}"><span class="team-name">${awayName}</span></div>
-            <div class="game-separator">@</div>
-            <div class="team" data-team-name="${homeName}"><img src="${game['Home Logo'] || ''}" alt="${homeName}"><span class="team-name">${homeName}</span></div>
-            <div class="game-info">${getKickoffTimeAsDate(game).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
-            <div class="double-up-container"><button class="double-up-btn" disabled>Double Up</button></div>
-        `;
-        
+        gameCard.innerHTML = `<div class="team" data-team-name="${awayName}"><img src="${game['Away Logo'] || ''}" alt="${awayName}"><span class="team-name">${awayName}</span></div><div class="game-separator">@</div><div class="team" data-team-name="${homeName}"><img src="${game['Home Logo'] || ''}" alt="${homeName}"><span class="team-name">${homeName}</span></div><div class="game-info">${getKickoffTimeAsDate(game).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div><div class="double-up-container"><button class="double-up-btn" disabled>Double Up</button></div>`;
         const doubleUpBtn = gameCard.querySelector('.double-up-btn');
         if (userPicks[gameId]) {
             const selectedTeamEl = gameCard.querySelector(`.team[data-team-name="${userPicks[gameId]}"]`);
             if (selectedTeamEl) {
                 selectedTeamEl.classList.add('selected');
-                doubleUpBtn.disabled = false; // Enable the button since a pick is pre-selected
+                doubleUpBtn.disabled = false;
                 const savedIcon = document.createElement('div');
                 savedIcon.className = 'saved-indicator';
                 savedIcon.title = 'Your pick is saved';
                 selectedTeamEl.appendChild(savedIcon);
             }
         }
-        if (doubleUpPicks.includes(gameId)) {
-            doubleUpBtn.classList.add('selected');
-        }
-
+        if (doubleUpPicks.includes(gameId)) doubleUpBtn.classList.add('selected');
         gamesContainer.appendChild(gameCard);
     });
     addGameCardEventListeners();
 }
 
-// --- MODIFIED: Added logic to enable/disable the Double Up button ---
 function addGameCardEventListeners() {
     document.querySelectorAll('.game-card').forEach(card => {
         const gameId = card.dataset.gameId;
         const doubleUpBtn = card.querySelector('.double-up-btn');
-
         card.querySelectorAll('.team').forEach(team => {
             team.addEventListener('click', (e) => {
                 const clickedTeam = e.currentTarget;
                 const wasAlreadySelected = clickedTeam.classList.contains('selected');
-
                 card.querySelectorAll('.team').forEach(t => t.classList.remove('selected'));
                 const existingIcon = card.querySelector('.saved-indicator');
                 if (existingIcon) existingIcon.remove();
-
                 if (wasAlreadySelected) {
                     userPicks[gameId] = undefined;
-                    doubleUpBtn.disabled = true; // Disable button on deselect
-                    doubleUpBtn.classList.remove('selected'); // Unselect double up on deselect
-                    doubleUpPicks = doubleUpPicks.filter(id => id !== gameId); // Remove from state
+                    doubleUpBtn.disabled = true;
+                    doubleUpBtn.classList.remove('selected');
+                    doubleUpPicks = doubleUpPicks.filter(id => id !== gameId);
                 } else {
                     clickedTeam.classList.add('selected');
                     userPicks[gameId] = clickedTeam.dataset.teamName;
-                    doubleUpBtn.disabled = false; // Enable button on select
+                    doubleUpBtn.disabled = false;
                 }
             });
         });
-
         doubleUpBtn.addEventListener('click', (e) => {
             const clickedButton = e.currentTarget;
             clickedButton.classList.toggle('selected');
@@ -512,23 +427,19 @@ savePicksBtn.addEventListener('click', async () => {
             if (getKickoffTimeAsDate(game) < now) { return alert(`Too late! Game locked.`); }
         }
     }
-    
-    const picksToUpsert = Object.keys(userPicks)
-        .filter(gameId => userPicks[gameId] !== undefined)
-        .map(gameId => ({
-            user_id: currentUser.id,
-            game_id: parseInt(gameId),
-            picked_team: userPicks[gameId],
-            is_double_up: doubleUpPicks.includes(gameId),
-            week: activeWeek
-        }));
+    const picksToUpsert = Object.keys(userPicks).filter(gameId => userPicks[gameId] !== undefined).map(gameId => ({
+        user_id: currentUser.id,
+        game_id: parseInt(gameId),
+        picked_team: userPicks[gameId],
+        is_double_up: doubleUpPicks.includes(gameId),
+        week: activeWeek
+    }));
     const picksToDelete = [];
     for (const gameId of initiallySavedPicks) {
         if (userPicks[gameId] === undefined) {
             picksToDelete.push(parseInt(gameId));
         }
     }
-
     try {
         if (picksToUpsert.length > 0) {
             const { error: upsertError } = await supabase.from('picks').upsert(picksToUpsert, { onConflict: 'user_id, game_id' });
