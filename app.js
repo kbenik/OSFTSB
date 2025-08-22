@@ -335,9 +335,12 @@ function showPage(pageId) {
     if (activePage) activePage.classList.add('active');
     if (pageId === 'picks-page') {
         renderGames();
+    }
     if (pageId === 'matches-page') {
         renderMatchesPage();
     }
+        if (pageId === 'scoreboard-page') {
+        renderScoreboard();
     }
 }
 
