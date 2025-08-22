@@ -15,14 +15,15 @@ let isGameDataLoaded = false;
 let activeWeek = '';
 let allGames = [];
 let userPicks = {};
-// --- MODIFIED: Changed from a single value to an array to support multiple double-ups ---
-let doubleUpPicks = []; 
+let doubleUpPicks = [];
 let currentUser = null;
+
+// --- NEW STATE VARIABLE: To track what was initially saved ---
+let initiallySavedPicks = new Set();
 
 // =================================================================
 // DOM ELEMENTS
 // =================================================================
-
 const signUpForm = document.getElementById('sign-up-form');
 const loginForm = document.getElementById('login-form');
 const userStatusDiv = document.getElementById('user-status');
@@ -35,7 +36,6 @@ const logo = document.getElementById('logo');
 // =================================================================
 // DATE & TIME LOGIC
 // =================================================================
-
 function getKickoffTimeAsDate(game) {
     if (!game || !game.Date || !game.Time) return null;
     const dateStr = game.Date.split(' ')[1];
@@ -57,7 +57,6 @@ function determineCurrentWeek(games) {
 // =================================================================
 // AUTHENTICATION
 // =================================================================
-
 async function handleAuthStateChange(session) {
     if (session) {
         currentUser = session.user;
@@ -106,10 +105,7 @@ async function logoutUser() {
 function updateUserStatusUI() {
     if (currentUser) {
         const username = currentUser?.user_metadata?.username || currentUser?.email;
-        userStatusDiv.innerHTML = `
-            <span>Welcome, ${username}</span>
-            <button id="logout-btn">Logout</button>
-        `;
+        userStatusDiv.innerHTML = `<span>Welcome, ${username}</span><button id="logout-btn">Logout</button>`;
         mainNav.classList.remove('hidden');
     } else {
         userStatusDiv.innerHTML = `<a href="#auth" class="nav-link">Login / Sign Up</a>`;
@@ -120,7 +116,6 @@ function updateUserStatusUI() {
 // =================================================================
 // DASHBOARD & DATA FETCHING
 // =================================================================
-
 async function fetchDashboardData() {
     if (!currentUser) return;
     const { data: profile } = await supabase.from('profiles').select('score').eq('id', currentUser.id).single();
@@ -160,7 +155,6 @@ function renderDashboard(profile, picks) {
 // =================================================================
 // PAGE NAVIGATION & PICKS LOGIC
 // =================================================================
-
 function showPage(pageId) {
     if (pageId !== 'auth-page' && !currentUser) {
         showPage('auth-page');
@@ -222,15 +216,18 @@ function parseCSV(csvText) {
     });
 }
 
+// --- MODIFIED to use the new state tracking ---
 async function renderGames() {
     if (!isGameDataLoaded) {
         gamesContainer.innerHTML = '<p>Loading live game data...</p>';
         return;
     }
     const savedPicks = await fetchUserPicksForWeek(activeWeek);
+    
+    // Reset all state variables before rendering
     userPicks = {};
-    // --- MODIFIED: Reset the array for pre-population ---
     doubleUpPicks = [];
+    initiallySavedPicks = new Set(); // Use a Set for efficient lookups
 
     gamesContainer.innerHTML = '';
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
@@ -239,122 +236,155 @@ async function renderGames() {
         gamesContainer.innerHTML = `<p>No games found for ${activeWeek}.</p>`;
         return;
     }
+    
     const now = new Date();
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
         const savedPick = savedPicks.find(p => p.game_id == gameId);
+        
+        // Populate our state from the database
+        if (savedPick) {
+            initiallySavedPicks.add(gameId); // Add to our "memory" of saved picks
+            userPicks[gameId] = savedPick.picked_team;
+            if (savedPick.is_double_up) {
+                doubleUpPicks.push(gameId);
+            }
+        }
+
         const gameCard = document.createElement('div');
         gameCard.className = 'game-card';
         gameCard.dataset.gameId = gameId;
-        const kickoffTime = getKickoffTimeAsDate(game);
-        if (kickoffTime < now) gameCard.classList.add('locked');
-        const awayLogo = game['Away Logo'] || '';
-        const homeLogo = game['Home Logo'] || '';
+        if (getKickoffTimeAsDate(game) < now) gameCard.classList.add('locked');
+        
         const awayName = game['Away Display Name'] || 'Team';
         const homeName = game['Home Display Name'] || 'Team';
+
         gameCard.innerHTML = `
-            <div class="team" data-team-name="${awayName}"><img src="${awayLogo}" alt="${awayName}"><span class="team-name">${awayName}</span></div>
+            <div class="team" data-team-name="${awayName}"><img src="${game['Away Logo'] || ''}" alt="${awayName}"><span class="team-name">${awayName}</span></div>
             <div class="game-separator">@</div>
-            <div class="team" data-team-name="${homeName}"><img src="${homeLogo}" alt="${homeName}"><span class="team-name">${homeName}</span></div>
-            <div class="game-info">${kickoffTime.toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+            <div class="team" data-team-name="${homeName}"><img src="${game['Home Logo'] || ''}" alt="${homeName}"><span class="team-name">${homeName}</span></div>
+            <div class="game-info">${getKickoffTimeAsDate(game).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
             <div class="double-up-container"><button class="double-up-btn">Double Up</button></div>
         `;
-        gamesContainer.appendChild(gameCard);
-
-        if (savedPick) {
-            const selectedTeamEl = gameCard.querySelector(`.team[data-team-name="${savedPick.picked_team}"]`);
+        
+        // Apply the visual state AFTER creating the card
+        if (userPicks[gameId]) {
+            const selectedTeamEl = gameCard.querySelector(`.team[data-team-name="${userPicks[gameId]}"]`);
             if (selectedTeamEl) {
                 selectedTeamEl.classList.add('selected');
                 const savedIcon = document.createElement('div');
                 savedIcon.className = 'saved-indicator';
                 savedIcon.title = 'Your pick is saved';
                 selectedTeamEl.appendChild(savedIcon);
-                userPicks[gameId] = savedPick.picked_team;
-            }
-            if (savedPick.is_double_up) {
-                gameCard.querySelector('.double-up-btn').classList.add('selected');
-                // --- MODIFIED: Add the game ID to the doubleUpPicks array ---
-                doubleUpPicks.push(gameId);
             }
         }
+        if (doubleUpPicks.includes(gameId)) {
+            gameCard.querySelector('.double-up-btn').classList.add('selected');
+        }
+
+        gamesContainer.appendChild(gameCard);
     });
     addGameCardEventListeners();
 }
 
+// --- MODIFIED event listener logic ---
 function addGameCardEventListeners() {
     document.querySelectorAll('.game-card').forEach(card => {
         const gameId = card.dataset.gameId;
+
         card.querySelectorAll('.team').forEach(team => {
-            team.addEventListener('click', () => {
-                const otherTeam = team.parentElement.querySelector('.team:not([data-team-name="' + team.dataset.teamName + '"])');
-                otherTeam.classList.remove('selected');
-                team.classList.toggle('selected');
-                userPicks[gameId] = team.classList.contains('selected') ? team.dataset.teamName : undefined;
+            team.addEventListener('click', (e) => {
+                const clickedTeam = e.currentTarget;
+                const wasAlreadySelected = clickedTeam.classList.contains('selected');
+
+                // Clear all selections and icons within this game card first
+                card.querySelectorAll('.team').forEach(t => t.classList.remove('selected'));
+                const existingIcon = card.querySelector('.saved-indicator');
+                if (existingIcon) existingIcon.remove();
+
+                if (wasAlreadySelected) {
+                    // If it was selected, deselect it and mark for deletion
+                    userPicks[gameId] = undefined;
+                } else {
+                    // If it was not selected, select it
+                    clickedTeam.classList.add('selected');
+                    userPicks[gameId] = clickedTeam.dataset.teamName;
+                }
             });
         });
 
-        // --- NEW LOGIC: Toggle behavior for multiple double-up selections ---
         card.querySelector('.double-up-btn').addEventListener('click', (e) => {
             const clickedButton = e.currentTarget;
-            const gameId = card.dataset.gameId;
-
-            // Toggle the visual 'selected' state of the button
             clickedButton.classList.toggle('selected');
-
             if (clickedButton.classList.contains('selected')) {
-                // If it's now selected, add it to our array
-                if (!doubleUpPicks.includes(gameId)) {
-                    doubleUpPicks.push(gameId);
-                }
+                if (!doubleUpPicks.includes(gameId)) doubleUpPicks.push(gameId);
             } else {
-                // If it's now unselected, remove it from our array
                 doubleUpPicks = doubleUpPicks.filter(id => id !== gameId);
             }
         });
     });
 }
 
+// --- MODIFIED save logic using the new state tracking ---
 savePicksBtn.addEventListener('click', async () => {
     if (!currentUser) return alert('You must be logged in to save picks!');
 
-    // --- NEW LOGIC: Validation for a minimum of 3 picks ---
     const validPicksCount = Object.values(userPicks).filter(pick => pick !== undefined).length;
     if (validPicksCount < 3) {
         return alert('You must make at least 3 picks before saving.');
     }
-    
+
     const now = new Date();
     for (const gameId in userPicks) {
         if (userPicks[gameId]) {
             const game = allGames.find(g => g['Game Id'] == gameId);
-            if (getKickoffTimeAsDate(game) < now) { return alert(`Too late! The ${game['Away Display Name']} @ ${game['Home Display Name']} game has already started and is locked.`); }
+            if (getKickoffTimeAsDate(game) < now) { return alert(`Too late! Game locked.`); }
         }
     }
-    const picksToInsert = Object.keys(userPicks).filter(gameId => userPicks[gameId]).map(gameId => ({
-        user_id: currentUser.id,
-        game_id: parseInt(gameId),
-        picked_team: userPicks[gameId],
-        // --- MODIFIED: Check if the gameId is in our new array ---
-        is_double_up: doubleUpPicks.includes(gameId),
-        week: activeWeek
-    }));
-    if (picksToInsert.length === 0) return alert('You haven\'t made any picks yet!');
     
-    const { error } = await supabase.from('picks').upsert(picksToInsert, { onConflict: 'user_id, game_id' });
-    if (error) {
-        console.error('Error saving picks:', error);
-        alert('Error saving picks: ' + error.message);
-    } else {
+    // 1. Determine picks to UPSERT (new or changed)
+    const picksToUpsert = Object.keys(userPicks)
+        .filter(gameId => userPicks[gameId] !== undefined)
+        .map(gameId => ({
+            user_id: currentUser.id,
+            game_id: parseInt(gameId),
+            picked_team: userPicks[gameId],
+            is_double_up: doubleUpPicks.includes(gameId),
+            week: activeWeek
+        }));
+
+    // 2. Determine picks to DELETE by comparing current state to initial state
+    const picksToDelete = [];
+    for (const gameId of initiallySavedPicks) {
+        if (userPicks[gameId] === undefined) {
+            picksToDelete.push(parseInt(gameId));
+        }
+    }
+
+    try {
+        if (picksToUpsert.length > 0) {
+            const { error: upsertError } = await supabase.from('picks').upsert(picksToUpsert, { onConflict: 'user_id, game_id' });
+            if (upsertError) throw upsertError;
+        }
+
+        if (picksToDelete.length > 0) {
+            const { error: deleteError } = await supabase.from('picks').delete().eq('user_id', currentUser.id).in('game_id', picksToDelete);
+            if (deleteError) throw deleteError;
+        }
+
         alert('Your picks have been saved!');
         await fetchDashboardData();
         renderGames();
+
+    } catch (error) {
+        console.error('Error saving picks:', error);
+        alert('Error saving picks: ' + error.message);
     }
 });
 
 // =================================================================
 // INITIALIZE APP
 // =================================================================
-
 async function init() {
     supabase.auth.onAuthStateChange((event, session) => {
         if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
