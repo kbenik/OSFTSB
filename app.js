@@ -154,6 +154,51 @@ function renderDashboard(profile, picks) {
         historyBody.appendChild(row);
     });
 }
+async function renderScoreboard() {
+    const scoreboardBody = document.getElementById('scoreboard-body');
+    scoreboardBody.innerHTML = '<tr><td colspan="4">Loading scoreboard...</td></tr>';
+    
+    // For now, we'll hardcode the match ID to 1 for testing.
+    // In the future, you could get this from a dropdown or user selection.
+    const matchId = 1; 
+
+    const { data: scores, error } = await supabase.rpc('get_scoreboard_for_match', { p_match_id: matchId });
+
+    if (error || !scores) {
+        scoreboardBody.innerHTML = '<tr><td colspan="4">Could not load scoreboard data.</td></tr>';
+        if (error) console.error("Error fetching scoreboard:", error);
+        return;
+    }
+
+    if (scores.length === 0) {
+        scoreboardBody.innerHTML = '<tr><td colspan="4">No members in this match yet.</td></tr>';
+        return;
+    }
+
+    scoreboardBody.innerHTML = ''; // Clear loading message
+    const moneyPerPoint = 5; // Example value: $5 per point
+
+    scores.forEach((player, index) => {
+        const rank = index + 1;
+        let moneyOwed = '-';
+
+        // Calculate the money owed to the person directly above in the rankings
+        if (index > 0) {
+            const personAbove = scores[index - 1];
+            const pointDifference = personAbove.score - player.score;
+            moneyOwed = `$${pointDifference * moneyPerPoint}`;
+        }
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${rank}</td>
+            <td>${player.username}</td>
+            <td>${player.score}</td>
+            <td>${moneyOwed}</td>
+        `;
+        scoreboardBody.appendChild(row);
+    });
+}
 // =================================================================
 // MATCHES LOGIC (CREATE, VIEW, JOIN)
 // =================================================================
