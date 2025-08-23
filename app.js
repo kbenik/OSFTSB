@@ -223,14 +223,21 @@ async function renderGames() {
         return;
     }
     const savedPicks = await fetchUserPicksForWeek(activeWeek);
+    
+    // Reset all state
     userPicks = {};
     userWagers = {};
     doubleUpPick = null;
-    initiallySavedPicks.clear();
-    
+    initiallySavedPicks = new Set(); // Use a Set for efficient lookups
+
     gamesContainer.innerHTML = '';
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
+
+    if (weeklyGames.length === 0) {
+        gamesContainer.innerHTML = `<p>No games found for ${activeWeek}.</p>`;
+        return;
+    }
     
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
@@ -270,15 +277,18 @@ async function renderGames() {
         `;
         gamesContainer.appendChild(gameCard);
 
+        // --- THIS IS THE FIXED BLOCK ---
+        // I changed all instances of 'card' to 'gameCard'
         if (userPicks[gameId]) {
-            card.querySelector(`.team[data-team-name="${userPicks[gameId]}"]`)?.classList.add('selected');
+            gameCard.querySelector(`.team[data-team-name="${userPicks[gameId]}"]`)?.classList.add('selected');
         }
         if (userWagers[gameId]) {
-            card.querySelector(`.wager-btn[data-value="${userWagers[gameId]}"]`)?.classList.add('selected');
+            gameCard.querySelector(`.wager-btn[data-value="${userWagers[gameId]}"]`)?.classList.add('selected');
         }
         if (doubleUpPick === gameId) {
-            card.querySelector('.double-up-btn').classList.add('selected');
+            gameCard.querySelector('.double-up-btn').classList.add('selected');
         }
+        // --- END OF FIX ---
     });
 
     addGameCardEventListeners();
