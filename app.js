@@ -3,7 +3,7 @@
 // =================================================================
 
 const SUPABASE_URL = 'https://mtjflkwoxjnwaawjlaxy.supabase.co'; 
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10amZsa3dveGpud2Fhd2psYXh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MDY1MzQsImV4cCI6MjA3MTI4MjUzNH0.PflqgxXG3kISTpp7nUNCXiBn-Ue3kvKNIS2yV1oz-jg';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI思AiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10amZsa3dveGpud2Fhd2psYXh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MDY1MzQsImV4cCI6MjA3MTI4MjUzNH0.PflqgxXG3kISTpp7nUNCXiBn-Ue3kvKNIS2yV1oz-jg';
 const supabase = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
 
@@ -28,7 +28,6 @@ const pages = document.querySelectorAll('.page');
 const gamesContainer = document.getElementById('games-container');
 const savePicksBtn = document.getElementById('save-picks-btn');
 const logo = document.getElementById('logo');
-// Note: References to Match-related elements are removed for simplicity
 
 // =================================================================
 // DATE & TIME LOGIC
@@ -71,10 +70,7 @@ function showPage(pageId) {
     if (activePage) {
         activePage.classList.add('active');
     }
-
     if (pageId === 'picks-page') renderGames();
-    // if (pageId === 'scoreboard-page') renderScoreboard();
-    // if (pageId === 'matches-page') renderMatchesPage();
 }
 
 signUpForm.addEventListener('submit', async (e) => {
@@ -105,6 +101,37 @@ async function logoutUser() {
 // =================================================================
 // DATA FETCHING & RENDERING
 // =================================================================
+
+// --- THIS FUNCTION WAS MISSING ---
+async function fetchGameData() {
+    try {
+        const response = await fetch(SHEET_URL);
+        if (!response.ok) throw new Error('Network response was not ok');
+        const csvText = await response.text();
+        allGames = parseCSV(csvText);
+    } catch (error) {
+        console.error('Failed to fetch game data:', error);
+    }
+}
+
+// --- THIS HELPER FUNCTION WAS ALSO MISSING ---
+function parseCSV(csvText) {
+    const lines = csvText.trim().split('\n');
+    if (lines.length < 2) return [];
+    const headers = lines[0].split(',').map(h => h.trim());
+    return lines.slice(1).map(line => {
+        const values = line.split(',');
+        const game = {};
+        headers.forEach((header, index) => {
+            let value = values[index] || '';
+            value = value.replace(/^"|"$/g, '').trim();
+            game[header] = value;
+        });
+        return game;
+    });
+}
+
+
 async function fetchDashboardData() {
     if (!currentUser) return;
     const { data: profile } = await supabase.from('profiles').select('score').eq('id', currentUser.id).single();
@@ -132,9 +159,6 @@ function renderDashboard(profile, picks) {
         historyBody.appendChild(row);
     });
 }
-
-// ... (Your renderGames, addGameCardEventListeners, etc. functions go here. They are correct.)
-// I am including them in full to be sure.
 
 async function fetchUserPicksForWeek(week) {
     if (!currentUser) return [];
@@ -263,28 +287,65 @@ function addGameCardEventListeners() {
 }
 
 savePicksBtn.addEventListener('click', async () => {
-    // ... (Your savePicksBtn logic is correct, no changes needed here)
+    if (!currentUser) return alert('You must be logged in!');
+    
+    try {
+        const picksToUpsert = Object.keys(userPicks)
+            .filter(gameId => userPicks[gameId] !== undefined)
+            .map(gameId => {
+                if (!userWagers[gameId]) {
+                    const game = allGames.find(g => g['Game Id'] == gameId);
+                    throw new Error(`You must place a wager for the ${game['Away Display Name']} @ ${game['Home Display Name']} game.`);
+                }
+                return {
+                    user_id: currentUser.id,
+                    game_id: parseInt(gameId),
+                    picked_team: userPicks[gameId],
+                    wager: userWagers[gameId],
+                    is_double_up: gameId === doubleUpPick,
+                    week: activeWeek
+                };
+            });
+        
+        const picksToDelete = [];
+        for (const gameId of initiallySavedPicks) {
+            if (userPicks[gameId] === undefined) {
+                picksToDelete.push(parseInt(gameId));
+            }
+        }
+
+        if (picksToUpsert.length > 0) {
+            const { error } = await supabase.from('picks').upsert(picksToUpsert, { onConflict: 'user_id, game_id' });
+            if (error) throw error;
+        }
+        if (picksToDelete.length > 0) {
+            const { error } = await supabase.from('picks').delete().eq('user_id', currentUser.id).in('game_id', picksToDelete);
+            if (error) throw error;
+        }
+
+        alert('Your picks have been saved!');
+        await fetchDashboardData();
+        renderGames();
+
+    } catch (error) {
+        console.error("Save Picks Error:", error);
+        alert(error.message);
+    }
 });
 
 // =================================================================
 // INITIALIZE APP
 // =================================================================
 async function init() {
-    // 1. Fetch the non-user-specific game data first
     await fetchGameData();
     activeWeek = determineCurrentWeek(allGames);
     isGameDataLoaded = true;
 
-    // 2. Set up the single, definitive auth state listener
     supabase.auth.onAuthStateChange(async (event, session) => {
-        // This will fire with 'INITIAL_SESSION' on page load,
-        // and 'SIGNED_IN' or 'SIGNED_OUT' on user actions.
         if (session) {
             currentUser = session.user;
-            await fetchDashboardData(); // Fetch user-specific data
+            await fetchDashboardData();
             updateUserStatusUI();
-            
-            // Navigate to the correct page
             const currentHash = window.location.hash.substring(1);
             if (currentHash && document.getElementById(currentHash + '-page')) {
                 showPage(currentHash + '-page');
@@ -298,7 +359,6 @@ async function init() {
         }
     });
 
-    // 3. Set up global click listeners
     document.addEventListener('click', (e) => {
         if (e.target.closest('#logout-btn')) {
             e.preventDefault();
