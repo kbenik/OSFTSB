@@ -10,25 +10,27 @@
 <body>
 
     <header>
-        <nav class="container">
-            <div class="logo-nav-group">
-                <a href="#home" id="logo" class="nav-link" style="font-weight: bold; font-size: 1.5rem;">OSFTSB</a>
-                <!-- *** NEW: Hamburger Button for Mobile *** -->
+        <!-- *** NEW HEADER STRUCTURE *** -->
+        <div class="container nav-container">
+            <div class="nav-left">
+                <a href="#home" id="logo" class="nav-link">OSFTSB</a>
                 <button id="hamburger-btn" class="hamburger">
                     <span class="hamburger-line"></span>
                     <span class="hamburger-line"></span>
                     <span class="hamburger-line"></span>
                 </button>
-                <ul id="main-nav">
-                    <li><a href="#home" class="nav-link">Dashboard</a></li>
-                    <li><a href="#picks" class="nav-link">Picks</a></li>
-                    <li><a href="#scoreboard" class="nav-link">Scoreboard</a></li>
-                    <li><a href="#matches" class="nav-link">Matches</a></li>
-                </ul>
             </div>
             <div id="user-status">
                 <!-- Populated by JS -->
             </div>
+        </div>
+        <nav id="main-nav">
+            <ul class="container">
+                <li><a href="#home" class="nav-link">Dashboard</a></li>
+                <li><a href="#picks" class="nav-link">Picks</a></li>
+                <li><a href="#scoreboard" class="nav-link">Scoreboard</a></li>
+                <li><a href="#matches" class="nav-link">Matches</a></li>
+            </ul>
         </nav>
     </header>
 
