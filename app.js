@@ -8,7 +8,7 @@ const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95t
 
 // --- STATE MANAGEMENT ---
 let allGames = [];
-let defaultWeek = ''; // The week to show on first load
+let defaultWeek = '';
 let currentUser = null;
 let userPicks = {};
 let userWagers = {};
@@ -37,6 +37,7 @@ function parseCSV(csvText) {
         return game;
     });
 }
+
 function getKickoffTimeAsDate(game) {
     if (!game || !game.Date || !game.Time) {
         return new Date('1970-01-01T00:00:00Z');
@@ -57,6 +58,7 @@ function getKickoffTimeAsDate(game) {
         return new Date('1970-01-01T00:00:00Z');
     }
 }
+
 function determineDefaultWeek(games) {
     const now = new Date();
     const regularSeasonGames = games.filter(g => g.Week && g.Week.startsWith('Week '));
@@ -67,6 +69,79 @@ function determineDefaultWeek(games) {
     if (nextGame) return nextGame.Week;
     const lastWeek = regularSeasonGames[regularSeasonGames.length - 1];
     return lastWeek ? lastWeek.Week : 'Week 1';
+}
+
+// =================================================================
+// NAVIGATION & UI MANAGEMENT
+// =================================================================
+function updateUserStatusUI() {
+    const userStatusDiv = document.getElementById('user-status');
+    const mainNav = document.getElementById('main-nav');
+    if (currentUser) {
+        const username = currentUser.user_metadata?.username || currentUser.email;
+        userStatusDiv.innerHTML = `<span>Welcome, ${username}</span><button id="logout-btn">Logout</button>`;
+        mainNav.classList.remove('hidden');
+    } else {
+        userStatusDiv.innerHTML = `<a href="#auth" class="nav-link">Login / Sign Up</a>`;
+        mainNav.classList.add('hidden');
+    }
+}
+
+function showPage(pageId) {
+    document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
+    const activePage = document.getElementById(pageId);
+    if (activePage) {
+        activePage.classList.add('active');
+        switch (pageId) {
+            case 'home-page':
+                displayDashboard();
+                break;
+            case 'picks-page':
+                displayPicksPage();
+                break;
+            case 'scoreboard-page':
+                displayScoreboardPage();
+                break;
+            case 'matches-page':
+                displayMatchesPage();
+                break;
+        }
+    }
+}
+
+// =================================================================
+// AUTHENTICATION
+// =================================================================
+function setupAuthListeners() {
+    document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('sign-up-username').value;
+        const email = document.getElementById('sign-up-email').value;
+        const password = document.getElementById('sign-up-password').value;
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: { data: { username } }
+        });
+        if (error) return alert('Error signing up: ' + error.message);
+        const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, username: username }]);
+        if (profileError) return alert('Error creating profile: ' + profileError.message);
+        alert('Sign up successful! Please check your email to confirm your account.');
+        e.target.reset();
+    });
+
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) alert('Error logging in: ' + error.message);
+    });
+}
+
+async function logoutUser() {
+    await supabase.auth.signOut();
+    window.location.hash = '';
 }
 
 // =================================================================
@@ -151,7 +226,6 @@ async function loadAndApplyUserPicks(week) {
     }
 }
 
-// --- OTHER PAGE-SPECIFIC FUNCTIONS ---
 async function displayDashboard() {
     if (!currentUser) return;
     const [pendingPicksRes, pastPicksRes] = await Promise.all([
@@ -255,7 +329,8 @@ function addGameCardEventListeners() {
             team.addEventListener('click', () => {
                 const teamName = team.dataset.teamName;
                 if (userPicks[gameId] === teamName) {
-                    userPicks[gameId] = undefined; userWagers[gameId] = undefined;
+                    userPicks[gameId] = undefined;
+                    userWagers[gameId] = undefined;
                     if (doubleUpPick === gameId) doubleUpPick = null;
                     card.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
                 } else {
@@ -298,7 +373,12 @@ async function savePicks() {
             }
         }
         const picksToUpsert = Object.keys(userPicks).filter(gameId => userPicks[gameId] !== undefined).map(gameId => ({
-            user_id: currentUser.id, game_id: parseInt(gameId, 10), picked_team: userPicks[gameId], wager: userWagers[gameId], is_double_up: gameId === doubleUpPick, week: selectedWeek
+            user_id: currentUser.id,
+            game_id: parseInt(gameId, 10),
+            picked_team: userPicks[gameId],
+            wager: userWagers[gameId],
+            is_double_up: gameId === doubleUpPick,
+            week: selectedWeek
         }));
         const picksToDelete = [...initiallySavedPicks].filter(gameId => !userPicks[gameId]);
         if (picksToUpsert.length > 0) {
@@ -320,7 +400,10 @@ async function savePicks() {
 async function joinMatch(matchId) {
     const password = prompt("Please enter the match password:");
     if (!password) return;
-    const { error } = await supabase.rpc('join_match_with_password', { p_match_id: matchId, p_password: password });
+    const { error } = await supabase.rpc('join_match_with_password', {
+        p_match_id: matchId,
+        p_password: password
+    });
     if (error) {
         alert("Failed to join match: " + error.message);
     } else {
@@ -334,9 +417,17 @@ async function createMatch() {
     if (!name) return;
     const password = prompt("Create a password for your match (users will need this to join):");
     if (!password) return;
-    const { data: newMatch, error: createError } = await supabase.from('matches').insert({ name, password, created_by: currentUser.id, is_public: true }).select().single();
+    const { data: newMatch, error: createError } = await supabase.from('matches').insert({
+        name,
+        password,
+        created_by: currentUser.id,
+        is_public: true
+    }).select().single();
     if (createError) return alert("Error creating match: " + createError.message);
-    const { error: memberError } = await supabase.from('match_members').insert({ match_id: newMatch.id, user_id: currentUser.id });
+    const { error: memberError } = await supabase.from('match_members').insert({
+        match_id: newMatch.id,
+        user_id: currentUser.id
+    });
     if (!memberError) {
         alert("Match created successfully!");
         displayMatchesPage();
@@ -348,29 +439,6 @@ async function createMatch() {
 async function fetchUserPicksForWeek(week) {
     if (!currentUser) return { data: [], error: null };
     return await supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('week', week);
-}
-
-// --- AUTH FUNCTIONS ---
-function setupAuthListeners() {
-    document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = document.getElementById('sign-up-username').value;
-        const email = document.getElementById('sign-up-email').value;
-        const password = document.getElementById('sign-up-password').value;
-        const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
-        if (error) return alert('Error signing up: ' + error.message);
-        const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, username: username }]);
-        if (profileError) return alert('Error creating profile: ' + profileError.message);
-        alert('Sign up successful! Please check your email to confirm your account.');
-        e.target.reset();
-    });
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('login-email').value;
-        const password = document.getElementById('login-password').value;
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) alert('Error logging in: ' + error.message);
-    });
 }
 
 // =================================================================
@@ -389,6 +457,7 @@ async function init() {
             window.location.hash = navLink.getAttribute('href').substring(1);
         }
     });
+
     window.addEventListener('hashchange', () => {
         const pageId = (window.location.hash.substring(1) || 'home') + '-page';
         if (currentUser) {
@@ -408,7 +477,7 @@ async function init() {
         document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
         return;
     }
-    
+
     supabase.auth.onAuthStateChange((event, session) => {
         currentUser = session?.user || null;
         updateUserStatusUI();
