@@ -1,3 +1,4 @@
+/* --- Root variables and body styles are unchanged --- */
 :root {
     --primary-color: #0d47a1; /* NFL Blue */
     --secondary-color: #d50a0a; /* NFL Red */
@@ -17,173 +18,40 @@ body {
     line-height: 1.6;
 }
 
-/* NEW UTILITY CLASS */
-.hidden {
-    display: none !important;
-}
+/* --- General utility classes are unchanged --- */
+.hidden { display: none !important; }
+.container { max-width: 960px; margin: 0 auto; padding: 20px; }
+h1, h2 { color: var(--primary-color); }
 
-.container {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 20px;
-}
+/* --- Header & Navigation are unchanged --- */
+header { background-color: var(--primary-color); color: white; padding: 1rem 0; box-shadow: var(--box-shadow); }
+nav { display: flex; justify-content: space-between; align-items: center; }
+.logo-nav-group { display: flex; align-items: center; gap: 20px; }
+#main-nav { display: flex; list-style: none; margin: 0; padding: 0; gap: 10px; }
+#main-nav .nav-link, .logo-nav-group .nav-link { color: white; text-decoration: none; font-weight: 500; padding: 5px 10px; border-radius: 5px; transition: background-color 0.3s; }
+#main-nav .nav-link:hover, .logo-nav-group .nav-link:hover { background-color: var(--secondary-color); }
+#user-status { display: flex; align-items: center; gap: 15px; }
+#user-status a, #user-status button { color: white; text-decoration: none; font-weight: 500; padding: 8px 12px; border-radius: 5px; transition: background-color 0.3s; background: none; border: 1px solid transparent; cursor: pointer; font-size: 0.9rem; }
+#user-status a:hover, #user-status button:hover { background-color: var(--secondary-color); }
+#user-status button { border-color: white; }
 
-header {
-    background-color: var(--primary-color);
-    color: white;
-    padding: 1rem 0;
-    box-shadow: var(--box-shadow);
-}
+/* --- Main content and Card styles are unchanged --- */
+main { padding-top: 20px; }
+.page { display: none; }
+.page.active { display: block; }
+.card { background-color: var(--card-background); border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 20px; margin-bottom: 20px; }
 
-nav {
-    display: flex;
-    justify-content: space-between; /* This will push the logo/nav to the left and user-status to the right */
-    align-items: center;
-}
-
-/* We group the logo and nav together to keep them on the left */
-.logo-nav-group {
-    display: flex;
-    align-items: center;
-    gap: 20px; /* Space between logo and nav links */
-}
-
-
-#main-nav {
-    display: flex; /* This remains */
-    list-style: none; 
-    margin: 0;
-    padding: 0;
-    gap: 10px; 
-}
-
-/* This styles the actual links */
-#main-nav .nav-link {
-    color: white;
-    text-decoration: none;
-    font-weight: 500;
-    padding: 5px 10px;
-    border-radius: 5px;
-    transition: background-color 0.3s;
-}
-
-#main-nav .nav-link:hover {
-    background-color: var(--secondary-color);
-}
-/* --- END OF NEW STYLES --- */
+/* --- Auth form styles are unchanged --- */
+.auth-form-container { display: flex; justify-content: space-around; gap: 40px; }
+.auth-form { flex: 1; display: flex; flex-direction: column; }
+.auth-form h2 { text-align: center; margin-top: 0; }
+.auth-form input { padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
+.auth-form button { padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; font-size: 1.1rem; cursor: pointer; transition: background-color 0.3s; }
+.auth-form button:hover { background-color: var(--secondary-color); }
 
 
-#user-status {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-#user-status a, #user-status button {
-    color: white;
-    text-decoration: none;
-    font-weight: 500;
-    padding: 5px 10px;
-    border-radius: 5px;
-    transition: background-color 0.3s;
-    background: none;
-    border: 1px solid transparent;
-    cursor: pointer;
-    font-size: 1rem;
-}
-
-#user-status a:hover, #user-status button:hover {
-    background-color: var(--secondary-color);
-}
-
-#user-status button {
-    border-color: white;
-}
-
-main {
-    padding-top: 20px;
-}
-
-.page {
-    display: none;
-}
-
-.page.active {
-    display: block;
-}
-
-h1, h2 {
-    color: var(--primary-color);
-}
-
-.card {
-    background-color: var(--card-background);
-    border-radius: var(--border-radius);
-    box-shadow: var(--box-shadow);
-    padding: 20px;
-    margin-bottom: 20px;
-}
-
-/* Auth Page Styles */
-.auth-form-container {
-    display: flex;
-    justify-content: space-around;
-    gap: 40px;
-}
-.auth-form {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-.auth-form h2 {
-    text-align: center;
-    margin-top: 0;
-}
-.auth-form input {
-    padding: 12px;
-    margin-bottom: 15px;
-    border: 1px solid #ccc;
-    border-radius: 5px;
-    font-size: 1rem;
-}
-.auth-form button {
-    padding: 12px;
-    background-color: var(--primary-color);
-    color: white;
-    border: none;
-    border-radius: 5px;
-    font-size: 1.1rem;
-    cursor: pointer;
-    transition: background-color 0.3s;
-}
-.auth-form button:hover {
-    background-color: var(--secondary-color);
-}
-
-/* Saved Pick Indicator Icon */
-.saved-indicator {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    width: 20px;
-    height: 20px;
-    background-color: var(--primary-color);
-    border-radius: 50%;
-    z-index: 5;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    /* Embedded SVG Lock Icon - White */
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='white' width='14px' height='14px'%3E%3Cpath d='M12 1.5A5.25 5.25 0 006.75 6.75v3.75H6a2.25 2.25 0 00-2.25 2.25v8.25A2.25 2.25 0 006 23.25h12A2.25 2.25 0 0020.25 21v-8.25A2.25 2.25 0 0018 10.5h-.75V6.75A5.25 5.25 0 0012 1.5zM8.25 6.75a3.75 3.75 0 017.5 0v3.75H8.25V6.75z'/%3E%3C/svg%3E");
-    background-size: 14px 14px;
-    background-repeat: no-repeat;
-    background-position: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-}
-
-/* Home Page Styles */
+/* --- Home Page / Dashboard Styles are unchanged --- */
 .score-display { text-align: center; padding: 30px; }
-.score-display h2 { margin-top: 0; }
 .score-display .score { font-size: 3rem; font-weight: bold; color: var(--primary-color); }
 .pick-history-table { width: 100%; border-collapse: collapse; }
 .pick-history-table th, .pick-history-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
@@ -191,21 +59,106 @@ h1, h2 {
 .pick-history-table .correct { color: green; font-weight: bold; }
 .pick-history-table .incorrect { color: red; font-weight: bold; }
 
-/* Picks Page Styles */
-.game-card { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 15px; margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: var(--border-radius); background-color: var(--card-background); box-shadow: var(--box-shadow); position: relative; }
+/* --- Picks Page Styles --- */
+.game-card {
+    display: grid;
+    /* Updated grid layout for better control */
+    grid-template-columns: 1fr auto 1fr;
+    grid-template-rows: auto auto auto; /* Add rows for info and controls */
+    gap: 10px 15px;
+    align-items: center;
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: var(--border-radius);
+    background-color: var(--card-background);
+    box-shadow: var(--box-shadow);
+    position: relative;
+}
 .game-card.locked::before { content: 'LOCKED'; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-15deg); background-color: rgba(213, 10, 10, 0.7); color: white; padding: 5px 15px; border-radius: 5px; font-weight: bold; font-size: 1.2rem; z-index: 10; }
-.game-card.locked .team, .game-card.locked .double-up-btn { opacity: 0.5; pointer-events: none; }
-.team { display: flex; flex-direction: column; align-items: center; cursor: pointer; padding: 10px; border-radius: var(--border-radius); transition: background-color 0.3s, transform 0.2s; border: 2px solid transparent; position: relative; }
+.game-card.locked .team, .game-card.locked .wager-controls { opacity: 0.6; pointer-events: none; }
+.team { display: flex; flex-direction: column; align-items: center; cursor: pointer; padding: 10px; border-radius: var(--border-radius); transition: background-color 0.3s, transform 0.2s; border: 2px solid transparent; position: relative; grid-row: 1; }
 .team:hover { transform: translateY(-3px); }
 .team.selected { background-color: #e3f2fd; border-color: var(--primary-color); }
 .team img { width: 60px; height: 60px; margin-bottom: 10px; }
 .team-name { font-weight: 600; text-align: center; }
-.game-separator { font-weight: bold; color: var(--secondary-color); }
-.game-info { grid-column: 1 / -1; text-align: center; font-size: 0.9rem; color: #666; padding-top: 10px; border-top: 1px solid #eee; margin-top: 15px; }
-.double-up-container { grid-column: 1 / -1; text-align: center; margin-top: 10px; }
-.double-up-btn { background-color: #e0e0e0; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: background-color 0.3s; }
-.double-up-btn.selected { background-color: var(--accent-color); color: var(--text-color); font-weight: bold; }
+.game-separator { font-weight: bold; color: var(--secondary-color); grid-row: 1; grid-column: 2; }
+.game-info { grid-column: 1 / -1; text-align: center; font-size: 0.9rem; color: #666; padding-top: 10px; border-top: 1px solid #eee; margin-top: 10px; grid-row: 2; }
+/* NEW: Controls Wrapper */
+.wager-controls { grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-top: 10px; flex-wrap: wrap; grid-row: 3; }
+.wager-options { display: flex; align-items: center; gap: 5px; }
+.wager-options span { font-weight: 500; margin-right: 5px; }
+.wager-btn { background-color: #f0f0f0; border: 1px solid #ccc; padding: 8px 12px; border-radius: 20px; cursor: pointer; transition: all 0.2s; }
+.wager-btn:hover { background-color: #ddd; }
+.wager-btn.selected { background-color: var(--primary-color); color: white; border-color: var(--primary-color); }
+
+.double-up-btn { background-color: #e0e0e0; border: none; padding: 8px 16px; border-radius: 20px; cursor: pointer; transition: background-color 0.3s; font-weight: bold; }
+.double-up-btn:hover { background-color: #d5d5d5; }
+.double-up-btn.selected { background-color: var(--accent-color); color: var(--text-color); }
+
 .save-picks-btn { display: block; width: 100%; padding: 15px; background-color: var(--primary-color); color: white; border: none; border-radius: var(--border-radius); font-size: 1.2rem; cursor: pointer; transition: background-color 0.3s; margin-top: 20px; }
 .save-picks-btn:hover { background-color: var(--secondary-color); }
 
+/* --- NEW: Matches Page Styles --- */
+#matches-list-container .match-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px;
+    border-bottom: 1px solid #eee;
+}
+#matches-list-container .match-item:last-child {
+    border-bottom: none;
+}
+.match-item span {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+.button-primary { /* For Create and Join buttons */
+    padding: 8px 16px;
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: background-color 0.3s;
+}
+.button-primary:hover {
+    background-color: var(--secondary-color);
+}
 
+/* --- NEW: Scoreboard Styles --- */
+#scoreboard-picks-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+}
+.scoreboard-user-picks {
+    border: 1px solid #e0e0e0;
+    border-radius: var(--border-radius);
+    padding: 15px;
+}
+.scoreboard-user-picks h3 {
+    margin-top: 0;
+    border-bottom: 2px solid var(--primary-color);
+    padding-bottom: 10px;
+}
+.scoreboard-user-picks ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.scoreboard-user-picks li {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+.scoreboard-user-picks li span:first-child {
+    font-weight: 500;
+}
+.scoreboard-user-picks li .wager-indicator {
+    font-weight: bold;
+    color: var(--primary-color);
+}
