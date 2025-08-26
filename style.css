@@ -23,7 +23,7 @@ body {
 .container { max-width: 960px; margin: 0 auto; padding: 20px; }
 h1, h2 { color: var(--primary-color); }
 
-/* --- Header & Navigation are unchanged --- */
+/* --- Header & Navigation --- */
 header { background-color: var(--primary-color); color: white; padding: 1rem 0; box-shadow: var(--box-shadow); }
 nav { display: flex; justify-content: space-between; align-items: center; }
 .logo-nav-group { display: flex; align-items: center; gap: 20px; }
@@ -31,9 +31,26 @@ nav { display: flex; justify-content: space-between; align-items: center; }
 #main-nav .nav-link, .logo-nav-group .nav-link { color: white; text-decoration: none; font-weight: 500; padding: 5px 10px; border-radius: 5px; transition: background-color 0.3s; }
 #main-nav .nav-link:hover, .logo-nav-group .nav-link:hover { background-color: var(--secondary-color); }
 #user-status { display: flex; align-items: center; gap: 15px; }
-#user-status a, #user-status button { color: white; text-decoration: none; font-weight: 500; padding: 8px 12px; border-radius: 5px; transition: background-color 0.3s; background: none; border: 1px solid transparent; cursor: pointer; font-size: 0.9rem; white-space: nowrap; /* Prevents text wrapping */ }
+#user-status a, #user-status button { color: white; text-decoration: none; font-weight: 500; padding: 8px 12px; border-radius: 5px; transition: background-color 0.3s; background: none; border: 1px solid transparent; cursor: pointer; font-size: 0.9rem; white-space: nowrap; }
 #user-status a:hover, #user-status button:hover { background-color: var(--secondary-color); }
 #user-status button { border-color: white; }
+
+/* *** NEW: Hamburger Button Styles *** */
+.hamburger {
+    display: none; /* Hidden by default on desktop */
+    flex-direction: column;
+    gap: 5px; /* Space between lines */
+    cursor: pointer;
+    background: none;
+    border: none;
+    padding: 0;
+}
+.hamburger-line {
+    width: 25px;
+    height: 3px;
+    background-color: white;
+    border-radius: 3px;
+}
 
 /* --- Main content and Card styles are unchanged --- */
 main { padding-top: 20px; }
@@ -94,7 +111,7 @@ main { padding-top: 20px; }
 .scoreboard-user-picks li .wager-indicator { font-weight: bold; color: var(--primary-color); }
 
 /* =================================================================
-   *** NEW: RESPONSIVE STYLES (for Mobile) ***
+   *** UPDATED: RESPONSIVE STYLES (for Mobile) ***
    ================================================================= */
 @media (max-width: 768px) {
     .container {
@@ -103,20 +120,33 @@ main { padding-top: 20px; }
 
     /* --- Header & Navigation --- */
     nav {
-        flex-direction: column;
-        gap: 10px;
+        position: relative; /* Needed for absolute positioning of the nav menu */
+    }
+    .hamburger {
+        display: flex; /* Show the hamburger button on mobile */
     }
     #main-nav {
-        /* Hide complex nav on mobile, could be replaced with a hamburger menu later */
-        display: none;
-    }
-    .logo-nav-group {
+        display: none; /* Hide the nav links by default */
+        flex-direction: column;
+        position: absolute;
+        top: 100%; /* Position it right below the header's nav bar */
+        left: 0;
         width: 100%;
-        justify-content: space-between; /* Space out logo and user status */
+        background-color: var(--primary-color);
+        box-shadow: var(--box-shadow);
+        z-index: 1000;
     }
-    #user-status {
+    #main-nav.nav-open {
+        display: flex; /* Show the nav menu when this class is added */
+    }
+    #main-nav li {
         width: 100%;
-        justify-content: flex-end;
+        text-align: center;
+    }
+    #main-nav .nav-link {
+        display: block;
+        padding: 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     }
 
     /* --- Auth Page --- */
