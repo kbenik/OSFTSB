@@ -24,7 +24,7 @@ body {
 h1, h2 { color: var(--primary-color); }
 
 /* --- Header & Navigation (UPDATED) --- */
-header { background-color: var(--primary-color); color: white; padding: 0.5rem 0; box-shadow: var(--box-shadow); }
+header { background-color: var(--primary-color); color: white; padding: 0.5rem 0; box-shadow: var(--box-shadow); position: relative;}
 .nav-container { display: flex; justify-content: space-between; align-items: center; }
 #logo { font-weight: bold; font-size: 1.5rem !important; }
 #main-nav { 
