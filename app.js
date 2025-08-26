@@ -8,9 +8,8 @@ const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95t
 
 // --- STATE MANAGEMENT ---
 let allGames = [];
-let activeWeek = '';
+let defaultWeek = ''; // The week to show on first load
 let currentUser = null;
-let weeklyRevealTimes = new Map();
 let userPicks = {};
 let userWagers = {};
 let doubleUpPick = null;
@@ -24,6 +23,7 @@ document.addEventListener('DOMContentLoaded', init);
 // =================================================================
 // UTILITY & HELPER FUNCTIONS
 // =================================================================
+
 function parseCSV(csvText) {
     const lines = csvText.trim().split('\n');
     if (lines.length < 2) return [];
@@ -39,9 +39,6 @@ function parseCSV(csvText) {
     });
 }
 
-// =================================================================
-// *** FINAL, BULLETPROOF DATE & TIMEZONE LOGIC ***
-// =================================================================
 function getKickoffTimeAsDate(game) {
     if (!game || !game.Date || !game.Time) {
         return new Date('1970-01-01T00:00:00Z');
@@ -57,9 +54,7 @@ function getKickoffTimeAsDate(game) {
         if (modifier && modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
         const monthIndex = parseInt(month, 10) - 1;
 
-        // Use Date.UTC to create a reliable timestamp assuming source is US Eastern Time.
-        // During the NFL season, ET is either EDT (UTC-4) or EST (UTC-5).
-        // A simple +4 hours covers most of the season (EDT) and is consistent for comparison.
+        // Use Date.UTC to create a reliable timestamp, assuming source is US Eastern Time (UTC-4 during season)
         return new Date(Date.UTC(year, monthIndex, day, hours, minutes, 0) + (4 * 60 * 60 * 1000));
     } catch (e) {
         console.error("Failed to parse date for game:", game, e);
@@ -67,88 +62,70 @@ function getKickoffTimeAsDate(game) {
     }
 }
 
-function calculateRevealTimes(games) {
-    const regularSeasonGames = games.filter(g => g.Week && g.Week.startsWith('Week '));
-    for (let i = 1; i <= 18; i++) {
-        const weekString = `Week ${i}`;
-        const firstGameOfWeek = regularSeasonGames.find(g => g.Week === weekString);
-        if (!firstGameOfWeek) continue;
-        const firstGameKickoff = getKickoffTimeAsDate(firstGameOfWeek);
-        if (isNaN(firstGameKickoff)) continue;
-        const revealTime = new Date(firstGameKickoff);
-        const dayOfWeekUTC = revealTime.getUTCDay(); // Sunday = 0, Tuesday = 2
-        const daysToSubtract = (dayOfWeekUTC - 2 + 7) % 7;
-        revealTime.setUTCDate(revealTime.getUTCDate() - daysToSubtract);
-        revealTime.setUTCHours(10, 0, 0, 0); // 10:00 UTC is 6 AM EDT
-        weeklyRevealTimes.set(i, revealTime);
-    }
-}
-
-function determineCurrentWeek() {
+function determineDefaultWeek(games) {
     const now = new Date();
-    let activeWeekNum = 1;
-    for (let i = 1; i <= 18; i++) {
-        const revealTime = weeklyRevealTimes.get(i);
-        if (revealTime && now >= revealTime) {
-            activeWeekNum = i;
-        } else {
-            break;
-        }
-    }
-    return `Week ${activeWeekNum}`;
-}
+    const regularSeasonGames = games.filter(g => g.Week && g.Week.startsWith('Week '));
+    if (regularSeasonGames.length === 0) return 'Week 1';
 
+    const nextGame = regularSeasonGames
+        .sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b))
+        .find(g => getKickoffTimeAsDate(g) > now);
+
+    if (nextGame) return nextGame.Week;
+    
+    // If no future games, default to the last available week in the data
+    const lastWeek = regularSeasonGames[regularSeasonGames.length - 1];
+    return lastWeek ? lastWeek.Week : 'Week 1';
+}
 
 // =================================================================
 // PAGE-SPECIFIC LOGIC
 // =================================================================
 
-// --- PICKS PAGE (REWRITTEN FOR RESILIENCE) ---
-async function displayPicksPage() {
+// --- PICKS PAGE ---
+function displayPicksPage() {
+    const selector = document.getElementById('week-selector');
+    const allWeeks = [...new Set(allGames.filter(g => g.Week.startsWith('Week ')).map(g => g.Week))];
+    
+    allWeeks.sort((a, b) => parseInt(a.split(' ')[1]) - parseInt(b.split(' ')[1]));
+    
+    selector.innerHTML = allWeeks.map(w => `<option value="${w}">${w}</option>`).join('');
+    selector.value = defaultWeek;
+
+    const newSelector = selector.cloneNode(true);
+    selector.parentNode.replaceChild(newSelector, selector);
+    newSelector.addEventListener('change', () => renderGamesForWeek(newSelector.value));
+
+    renderGamesForWeek(defaultWeek);
+}
+
+async function renderGamesForWeek(week) {
     const gamesContainer = document.getElementById('games-container');
     const saveButton = document.getElementById('save-picks-btn');
-    const pageTitle = document.getElementById('picks-page-title');
-    pageTitle.textContent = `${activeWeek} Picks`;
+    document.getElementById('picks-page-title').textContent = `${week} Picks`;
 
-    if (allGames.length === 0) {
-        gamesContainer.innerHTML = '<p>Loading live game data...</p>';
-        return;
-    }
-
-    // STEP 1: Determine if picks should be visible based on the "Tuesday reveal" rule
-    const weekNum = parseInt(activeWeek.split(' ')[1]);
-    const revealTime = weeklyRevealTimes.get(weekNum);
-    const now = new Date();
-
-    if (!revealTime || now < revealTime) {
-        const revealDateString = revealTime.toLocaleString('en-US', {
-            weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit'
-        });
-        gamesContainer.innerHTML = `<p class="card">Picks for ${activeWeek} will be available on ${revealDateString}.</p>`;
-        saveButton.style.display = 'none';
-        return;
-    }
-
-    // STEP 2: Render all upcoming game cards for the active week
-    const weeklyGames = allGames.filter(game => game.Week === activeWeek);
-    const upcomingWeeklyGames = weeklyGames.filter(game => getKickoffTimeAsDate(game) > now);
-
-    if (upcomingWeeklyGames.length === 0) {
-        gamesContainer.innerHTML = `<p class="card">All games for ${activeWeek} have started. No more picks can be made.</p>`;
-        saveButton.style.display = 'none';
-        return;
-    }
-
+    gamesContainer.innerHTML = '';
     saveButton.style.display = 'block';
-    gamesContainer.innerHTML = ''; // Clear container before rendering
-    upcomingWeeklyGames.forEach(game => {
+
+    const now = new Date();
+    const weeklyGames = allGames.filter(game => game.Week === week);
+
+    if (weeklyGames.length === 0) {
+        gamesContainer.innerHTML = `<p class="card">No games found for ${week}.</p>`;
+        saveButton.style.display = 'none';
+        return;
+    }
+
+    weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
+        const kickoff = getKickoffTimeAsDate(game);
+        const isLocked = kickoff < now;
+        
         const gameCard = document.createElement('div');
-        gameCard.className = 'game-card';
+        gameCard.className = `game-card ${isLocked ? 'locked' : ''}`;
         gameCard.dataset.gameId = gameId;
 
-        const kickoffDate = getKickoffTimeAsDate(game);
-        const displayTime = kickoffDate.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const displayTime = kickoff.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
         gameCard.innerHTML = `
             <div class="team" data-team-name="${game['Away Display Name']}"><img src="${game['Away Logo']}" alt="${game['Away Display Name']}"><span class="team-name">${game['Away Display Name']}</span></div>
@@ -162,30 +139,28 @@ async function displayPicksPage() {
                 </div>
                 <button class="double-up-btn">2x Double Up</button>
             </div>
-            <!-- The saved indicator will be added later if picks load -->
         `;
         gamesContainer.appendChild(gameCard);
     });
+    
     addGameCardEventListeners();
+    await loadAndApplyUserPicks(week);
+}
 
-    // STEP 3: *AFTER* rendering, try to fetch and apply the user's saved picks
+async function loadAndApplyUserPicks(week) {
     try {
-        const { data: savedPicks, error } = await fetchUserPicksForWeek(activeWeek);
-        if (error) throw error; // Let the catch block handle it
+        const { data: savedPicks, error } = await fetchUserPicksForWeek(week);
+        if (error) throw error;
 
-        userPicks = {};
-        userWagers = {};
-        doubleUpPick = null;
-        initiallySavedPicks.clear();
+        userPicks = {}; userWagers = {}; doubleUpPick = null; initiallySavedPicks.clear();
         
         savedPicks.forEach(p => {
             initiallySavedPicks.add(p.game_id.toString());
             userPicks[p.game_id] = p.picked_team;
             userWagers[p.game_id] = p.wager;
             if (p.is_double_up) doubleUpPick = p.game_id.toString();
-
-            // Find the corresponding card and apply styles/indicators
-            const card = gamesContainer.querySelector(`.game-card[data-game-id="${p.game_id}"]`);
+            
+            const card = document.querySelector(`.game-card[data-game-id="${p.game_id}"]`);
             if (card) {
                 card.querySelector(`.team[data-team-name="${p.picked_team}"]`)?.classList.add('selected');
                 card.querySelector(`.wager-btn[data-value="${p.wager}"]`)?.classList.add('selected');
@@ -195,65 +170,11 @@ async function displayPicksPage() {
         });
     } catch (err) {
         console.error("Non-critical error fetching user picks:", err.message);
-        // The page is already rendered with game cards, so we don't need to show a full-page error.
-        // The user can still make and save new picks.
     }
 }
 
 
-// =================================================================
-// ALL OTHER FUNCTIONS (UNCHANGED)
-// =================================================================
-function updateUserStatusUI() {
-    const userStatusDiv = document.getElementById('user-status');
-    const mainNav = document.getElementById('main-nav');
-    if (currentUser) {
-        const username = currentUser.user_metadata?.username || currentUser.email;
-        userStatusDiv.innerHTML = `<span>Welcome, ${username}</span><button id="logout-btn">Logout</button>`;
-        mainNav.classList.remove('hidden');
-    } else {
-        userStatusDiv.innerHTML = `<a href="#auth" class="nav-link">Login / Sign Up</a>`;
-        mainNav.classList.add('hidden');
-    }
-}
-function showPage(pageId) {
-    document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
-    const activePage = document.getElementById(pageId);
-    if (activePage) {
-        activePage.classList.add('active');
-        switch (pageId) {
-            case 'home-page': displayDashboard(); break;
-            case 'picks-page': displayPicksPage(); break;
-            case 'scoreboard-page': displayScoreboardPage(); break;
-            case 'matches-page': displayMatchesPage(); break;
-        }
-    }
-}
-function setupAuthListeners() {
-    document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const username = document.getElementById('sign-up-username').value;
-        const email = document.getElementById('sign-up-email').value;
-        const password = document.getElementById('sign-up-password').value;
-        const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
-        if (error) return alert('Error signing up: ' + error.message);
-        const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, username: username }]);
-        if (profileError) return alert('Error creating profile: ' + profileError.message);
-        alert('Sign up successful! Please check your email to confirm your account.');
-        e.target.reset();
-    });
-    document.getElementById('login-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const email = document.getElementById('login-email').value;
-        const password = document.getElementById('login-password').value;
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) alert('Error logging in: ' + error.message);
-    });
-}
-async function logoutUser() {
-    await supabase.auth.signOut();
-    window.location.hash = ''; 
-}
+// --- OTHER PAGE-SPECIFIC FUNCTIONS ---
 async function displayDashboard() {
     if (!currentUser) return;
     const [pendingPicksRes, pastPicksRes] = await Promise.all([
@@ -261,9 +182,9 @@ async function displayDashboard() {
         supabase.from('picks').select('*').eq('user_id', currentUser.id).not('is_correct', 'is', null).order('created_at', { ascending: false })
     ]);
     const pendingBody = document.getElementById('pending-picks-body');
-    document.getElementById('pending-picks-week').textContent = activeWeek;
+    document.getElementById('pending-picks-week').textContent = defaultWeek;
     pendingBody.innerHTML = '';
-    const pendingPicksForWeek = pendingPicksRes.data?.filter(p => p.week === activeWeek) || [];
+    const pendingPicksForWeek = pendingPicksRes.data?.filter(p => p.week === defaultWeek) || [];
     if (pendingPicksForWeek.length > 0) {
         pendingPicksForWeek.forEach(pick => {
             const game = allGames.find(g => g['Game Id'] == pick.game_id);
@@ -272,7 +193,7 @@ async function displayDashboard() {
             pendingBody.innerHTML += `<tr><td>${gameName}</td><td>${pick.picked_team}</td><td>${pick.wager}${doubleUp}</td></tr>`;
         });
     } else {
-        pendingBody.innerHTML = `<tr><td colspan="3">No pending picks for ${activeWeek}.</td></tr>`;
+        pendingBody.innerHTML = `<tr><td colspan="3">No pending picks for ${defaultWeek}.</td></tr>`;
     }
     const historyBody = document.getElementById('pick-history-body');
     historyBody.innerHTML = '';
@@ -291,13 +212,64 @@ async function displayDashboard() {
         historyBody.innerHTML = '<tr><td colspan="4">No pick history yet.</td></tr>';
     }
 }
-async function fetchUserPicksForWeek(week) {
-    if (!currentUser) return { data: [], error: null };
-    return await supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('week', week);
+async function displayScoreboardPage() {
+    const selector = document.getElementById('match-selector');
+    const standingsBody = document.getElementById('scoreboard-standings-body');
+    const picksContainer = document.getElementById('scoreboard-picks-container');
+    const { data: userMatches, error: userMatchesError } = await supabase.from('match_members').select('matches (id, name)').eq('user_id', currentUser.id);
+    if (userMatchesError || !userMatches || userMatches.length === 0) {
+        standingsBody.innerHTML = '<tr><td colspan="3">You are not part of any matches yet. Visit the Matches page to join or create one!</td></tr>';
+        picksContainer.innerHTML = '';
+        selector.innerHTML = '';
+        return;
+    }
+    selector.innerHTML = userMatches.map(m => `<option value="${m.matches.id}">${m.matches.name}</option>`).join('');
+    const newSelector = selector.cloneNode(true);
+    selector.parentNode.replaceChild(newSelector, selector);
+    newSelector.addEventListener('change', () => loadScoreboardForMatch(newSelector.value));
+    loadScoreboardForMatch(newSelector.value);
 }
+async function loadScoreboardForMatch(matchId) {
+    document.getElementById('scoreboard-week-title').textContent = defaultWeek;
+    const { data: members, error: membersError } = await supabase.from('match_members').select('score, profiles (id, username)').eq('match_id', matchId).order('score', { ascending: false });
+    if (membersError) return console.error("Error fetching members");
+    const standingsBody = document.getElementById('scoreboard-standings-body');
+    standingsBody.innerHTML = '';
+    members.forEach((member, index) => {
+        standingsBody.innerHTML += `<tr><td>${index + 1}</td><td>${member.profiles.username}</td><td>${member.score}</td></tr>`;
+    });
+    const memberIds = members.map(m => m.profiles.id);
+    const { data: allPicks } = await supabase.from('picks').select('picked_team, wager, is_double_up, game_id, profiles (username)').in('user_id', memberIds).eq('week', defaultWeek);
+    const picksContainer = document.getElementById('scoreboard-picks-container');
+    picksContainer.innerHTML = '';
+    const picksByUser = members.map(m => ({
+        username: m.profiles.username,
+        picks: allPicks?.filter(p => p.profiles.username === m.profiles.username) || []
+    }));
+    picksByUser.forEach(user => {
+        let picksHtml = user.picks.map(pick => {
+            const doubleUp = pick.is_double_up ? ' 🔥' : '';
+            return `<li><span>${pick.picked_team}</span> <span class="wager-indicator">${pick.wager}${doubleUp}</span></li>`;
+        }).join('');
+        picksContainer.innerHTML += `<div class="scoreboard-user-picks"><h3>${user.username}</h3><ul>${picksHtml || '<li>No picks made yet.</li>'}</ul></div>`;
+    });
+}
+async function displayMatchesPage() {
+    const container = document.getElementById('matches-list-container');
+    container.innerHTML = '<p>Loading public matches...</p>';
+    const { data: matches, error } = await supabase.from('matches').select('id, name').eq('is_public', true);
+    if (error) return container.innerHTML = '<p>Could not load matches. Please try again.</p>';
+    if (matches.length === 0) return container.innerHTML = '<p>No public matches found. Why not create one?</p>';
+    container.innerHTML = matches.map(match => `<div class="match-item"><span>${match.name}</span><button class="button-primary join-match-btn" data-match-id="${match.id}">Join</button></div>`).join('');
+}
+
+// =================================================================
+// EVENT HANDLERS & DATA SAVING
+// =================================================================
 function addGameCardEventListeners() {
     const allDoubleUpBtns = document.querySelectorAll('.double-up-btn');
     document.querySelectorAll('.game-card').forEach(card => {
+        if (card.classList.contains('locked')) return; // Don't add listeners to locked cards
         const gameId = card.dataset.gameId;
         card.querySelectorAll('.team').forEach(team => {
             team.addEventListener('click', () => {
@@ -337,6 +309,7 @@ function addGameCardEventListeners() {
 async function savePicks() {
     if (!currentUser) return alert('You must be logged in!');
     try {
+        const selectedWeek = document.getElementById('week-selector').value;
         for (const gameId in userPicks) {
             if (userPicks[gameId] && !userWagers[gameId]) {
                 const game = allGames.find(g => g['Game Id'] === gameId);
@@ -344,7 +317,7 @@ async function savePicks() {
             }
         }
         const picksToUpsert = Object.keys(userPicks).filter(gameId => userPicks[gameId] !== undefined).map(gameId => ({
-            user_id: currentUser.id, game_id: parseInt(gameId, 10), picked_team: userPicks[gameId], wager: userWagers[gameId], is_double_up: gameId === doubleUpPick, week: activeWeek
+            user_id: currentUser.id, game_id: parseInt(gameId, 10), picked_team: userPicks[gameId], wager: userWagers[gameId], is_double_up: gameId === doubleUpPick, week: selectedWeek
         }));
         const picksToDelete = [...initiallySavedPicks].filter(gameId => !userPicks[gameId]);
         if (picksToUpsert.length > 0) {
@@ -356,59 +329,11 @@ async function savePicks() {
             if (error) throw error;
         }
         alert('Your picks have been saved!');
-        displayPicksPage();
+        renderGamesForWeek(selectedWeek);
     } catch (error) {
         console.error("Save Picks Error:", error);
         alert('Error: ' + error.message);
     }
-}
-async function displayScoreboardPage() {
-    const selector = document.getElementById('match-selector');
-    const standingsBody = document.getElementById('scoreboard-standings-body');
-    const picksContainer = document.getElementById('scoreboard-picks-container');
-    const { data: userMatches, error: userMatchesError } = await supabase.from('match_members').select('matches (id, name)').eq('user_id', currentUser.id);
-    if (userMatchesError || !userMatches || userMatches.length === 0) {
-        standingsBody.innerHTML = '<tr><td colspan="3">You are not part of any matches yet. Visit the Matches page to join or create one!</td></tr>';
-        picksContainer.innerHTML = ''; selector.innerHTML = ''; return;
-    }
-    selector.innerHTML = userMatches.map(m => `<option value="${m.matches.id}">${m.matches.name}</option>`).join('');
-    const newSelector = selector.cloneNode(true);
-    selector.parentNode.replaceChild(newSelector, selector);
-    newSelector.addEventListener('change', () => loadScoreboardForMatch(newSelector.value));
-    loadScoreboardForMatch(newSelector.value);
-}
-async function loadScoreboardForMatch(matchId) {
-    document.getElementById('scoreboard-week-title').textContent = activeWeek;
-    const { data: members, error: membersError } = await supabase.from('match_members').select('score, profiles (id, username)').eq('match_id', matchId).order('score', { ascending: false });
-    if (membersError) return console.error("Error fetching members");
-    const standingsBody = document.getElementById('scoreboard-standings-body');
-    standingsBody.innerHTML = '';
-    members.forEach((member, index) => {
-        standingsBody.innerHTML += `<tr><td>${index + 1}</td><td>${member.profiles.username}</td><td>${member.score}</td></tr>`;
-    });
-    const memberIds = members.map(m => m.profiles.id);
-    const { data: allPicks, error: picksError } = await supabase.from('picks').select('picked_team, wager, is_double_up, game_id, profiles (username)').in('user_id', memberIds).eq('week', activeWeek);
-    const picksContainer = document.getElementById('scoreboard-picks-container');
-    picksContainer.innerHTML = '';
-    const picksByUser = members.map(m => ({
-        username: m.profiles.username,
-        picks: allPicks?.filter(p => p.profiles.username === m.profiles.username) || []
-    }));
-    picksByUser.forEach(user => {
-        let picksHtml = user.picks.map(pick => {
-            const doubleUp = pick.is_double_up ? ' 🔥' : '';
-            return `<li><span>${pick.picked_team}</span> <span class="wager-indicator">${pick.wager}${doubleUp}</span></li>`;
-        }).join('');
-        picksContainer.innerHTML += `<div class="scoreboard-user-picks"><h3>${user.username}</h3><ul>${picksHtml || '<li>No picks made yet.</li>'}</ul></div>`;
-    });
-}
-async function displayMatchesPage() {
-    const container = document.getElementById('matches-list-container');
-    container.innerHTML = '<p>Loading public matches...</p>';
-    const { data: matches, error } = await supabase.from('matches').select('id, name').eq('is_public', true);
-    if (error) return container.innerHTML = '<p>Could not load matches. Please try again.</p>';
-    if (matches.length === 0) return container.innerHTML = '<p>No public matches found. Why not create one?</p>';
-    container.innerHTML = matches.map(match => `<div class="match-item"><span>${match.name}</span><button class="button-primary join-match-btn" data-match-id="${match.id}">Join</button></div>`).join('');
 }
 async function joinMatch(matchId) {
     const password = prompt("Please enter the match password:");
@@ -436,6 +361,14 @@ async function createMatch() {
         alert("Match created, but failed to add you as a member: " + memberError.message);
     }
 }
+async function fetchUserPicksForWeek(week) {
+    if (!currentUser) return { data: [], error: null };
+    return await supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('week', week);
+}
+
+// =================================================================
+// INITIALIZATION & APP START
+// =================================================================
 async function init() {
     setupAuthListeners();
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
@@ -446,8 +379,7 @@ async function init() {
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
             e.preventDefault();
-            const pageId = navLink.getAttribute('href').substring(1);
-            window.location.hash = pageId;
+            window.location.hash = navLink.getAttribute('href').substring(1);
         }
     });
     window.addEventListener('hashchange', () => {
@@ -463,8 +395,7 @@ async function init() {
         const response = await fetch(SHEET_URL);
         const csvText = await response.text();
         allGames = parseCSV(csvText);
-        calculateRevealTimes(allGames);
-        activeWeek = determineCurrentWeek();
+        defaultWeek = determineDefaultWeek(allGames);
     } catch (error) {
         console.error("CRITICAL: Failed to load game data.", error);
         document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
