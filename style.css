@@ -23,34 +23,21 @@ body {
 .container { max-width: 960px; margin: 0 auto; padding: 20px; }
 h1, h2 { color: var(--primary-color); }
 
-/* --- Header & Navigation --- */
-header { background-color: var(--primary-color); color: white; padding: 1rem 0; box-shadow: var(--box-shadow); }
-nav { display: flex; justify-content: space-between; align-items: center; }
-.logo-nav-group { display: flex; align-items: center; gap: 20px; }
-#main-nav { display: flex; list-style: none; margin: 0; padding: 0; gap: 10px; }
-#main-nav .nav-link, .logo-nav-group .nav-link { color: white; text-decoration: none; font-weight: 500; padding: 5px 10px; border-radius: 5px; transition: background-color 0.3s; }
-#main-nav .nav-link:hover, .logo-nav-group .nav-link:hover { background-color: var(--secondary-color); }
+/* --- Header & Navigation (UPDATED) --- */
+header { background-color: var(--primary-color); color: white; padding: 0.5rem 0; box-shadow: var(--box-shadow); }
+.nav-container { display: flex; justify-content: space-between; align-items: center; }
+.nav-left { display: flex; align-items: center; gap: 20px; }
+#logo { font-weight: bold; font-size: 1.5rem !important; }
+#main-nav { display: flex; } /* Display links on desktop */
+#main-nav ul { display: flex; list-style: none; margin: 0; padding: 0; gap: 10px; }
+#main-nav .nav-link, .nav-left .nav-link { color: white; text-decoration: none; font-weight: 500; padding: 5px 10px; border-radius: 5px; transition: background-color 0.3s; }
+#main-nav .nav-link:hover, .nav-left .nav-link:hover { background-color: var(--secondary-color); }
 #user-status { display: flex; align-items: center; gap: 15px; }
 #user-status a, #user-status button { color: white; text-decoration: none; font-weight: 500; padding: 8px 12px; border-radius: 5px; transition: background-color 0.3s; background: none; border: 1px solid transparent; cursor: pointer; font-size: 0.9rem; white-space: nowrap; }
 #user-status a:hover, #user-status button:hover { background-color: var(--secondary-color); }
 #user-status button { border-color: white; }
-
-/* *** NEW: Hamburger Button Styles *** */
-.hamburger {
-    display: none; /* Hidden by default on desktop */
-    flex-direction: column;
-    gap: 5px; /* Space between lines */
-    cursor: pointer;
-    background: none;
-    border: none;
-    padding: 0;
-}
-.hamburger-line {
-    width: 25px;
-    height: 3px;
-    background-color: white;
-    border-radius: 3px;
-}
+.hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; background: none; border: none; padding: 5px; }
+.hamburger-line { width: 25px; height: 3px; background-color: white; border-radius: 3px; transition: transform 0.3s; }
 
 /* --- Main content and Card styles are unchanged --- */
 main { padding-top: 20px; }
