@@ -442,18 +442,33 @@ async function fetchUserPicksForWeek(week) {
 }
 
 // =================================================================
-// INITIALIZATION & APP START
+// INITIALIZATION & APP START (WITH HAMBURGER LOGIC)
 // =================================================================
 async function init() {
+    // *** NEW: Selectors for the hamburger menu ***
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    const mainNav = document.getElementById('main-nav');
+
     setupAuthListeners();
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
+
+    // *** NEW: Hamburger click event listener ***
+    hamburgerBtn.addEventListener('click', () => {
+        mainNav.classList.toggle('nav-open');
+    });
+
     document.body.addEventListener('click', (e) => {
         if (e.target.matches('#logout-btn')) logoutUser();
         if (e.target.matches('.join-match-btn')) joinMatch(e.target.dataset.matchId);
         if (e.target.matches('#create-match-btn')) createMatch();
+
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
             e.preventDefault();
+            // *** NEW: Close mobile nav when a link is clicked ***
+            if (mainNav.classList.contains('nav-open')) {
+                mainNav.classList.remove('nav-open');
+            }
             window.location.hash = navLink.getAttribute('href').substring(1);
         }
     });
@@ -477,7 +492,7 @@ async function init() {
         document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
         return;
     }
-
+    
     supabase.auth.onAuthStateChange((event, session) => {
         currentUser = session?.user || null;
         updateUserStatusUI();
