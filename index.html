@@ -13,7 +13,13 @@
         <nav class="container">
             <div class="logo-nav-group">
                 <a href="#home" id="logo" class="nav-link" style="font-weight: bold; font-size: 1.5rem;">OSFTSB</a>
-                <ul id="main-nav" class="hidden">
+                <!-- *** NEW: Hamburger Button for Mobile *** -->
+                <button id="hamburger-btn" class="hamburger">
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                    <span class="hamburger-line"></span>
+                </button>
+                <ul id="main-nav">
                     <li><a href="#home" class="nav-link">Dashboard</a></li>
                     <li><a href="#picks" class="nav-link">Picks</a></li>
                     <li><a href="#scoreboard" class="nav-link">Scoreboard</a></li>
@@ -21,7 +27,7 @@
                 </ul>
             </div>
             <div id="user-status">
-                <a href="#auth" class="nav-link">Login / Sign Up</a>
+                <!-- Populated by JS -->
             </div>
         </nav>
     </header>
@@ -98,7 +104,6 @@
         <section id="picks-page" class="page">
             <div style="display: flex; justify-content: space-between; align-items: center;">
                 <h1 id="picks-page-title">Weekly Picks</h1>
-                <!-- *** NEW: Week Selector Dropdown *** -->
                 <select id="week-selector"></select>
             </div>
             <div id="games-container">
@@ -109,6 +114,5 @@
     </main>
 
     <script src="app.js" type="module"></script>
-
 </body>
 </html>
