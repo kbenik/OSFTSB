@@ -101,64 +101,34 @@ main { padding-top: 20px; }
    *** UPDATED: RESPONSIVE STYLES (for Mobile) ***
    ================================================================= */
 @media (max-width: 768px) {
-    .container {
-        padding: 10px;
-    }
+    .container { padding: 10px; }
+    h1 { font-size: 1.5rem; }
 
-    /* --- Header & Navigation --- */
-    nav {
-        position: relative; /* Needed for absolute positioning of the nav menu */
-    }
-    .hamburger {
-        display: flex; /* Show the hamburger button on mobile */
-    }
+    /* --- UPDATED Header & Navigation --- */
+    .nav-left { flex-direction: column; align-items: flex-start; gap: 5px; }
+    #logo { padding: 0; }
+    .hamburger { display: flex; }
+    
     #main-nav {
-        display: none; /* Hide the nav links by default */
-        flex-direction: column;
+        display: none; /* Hide nav by default on mobile */
         position: absolute;
-        top: 100%; /* Position it right below the header's nav bar */
+        top: calc(100% + 10px); /* Position below the header */
         left: 0;
         width: 100%;
         background-color: var(--primary-color);
         box-shadow: var(--box-shadow);
-        z-index: 1000;
     }
-    #main-nav.nav-open {
-        display: flex; /* Show the nav menu when this class is added */
-    }
-    #main-nav li {
-        width: 100%;
-        text-align: center;
-    }
-    #main-nav .nav-link {
-        display: block;
-        padding: 15px;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
+    #main-nav.nav-open { display: block; } /* Show when toggled */
+    #main-nav ul { flex-direction: column; width: 100%; }
+    #main-nav li { width: 100%; text-align: left; }
+    #main-nav .nav-link { display: block; padding: 15px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+    #main-nav .nav-link:hover { background-color: var(--secondary-color); }
 
-    /* --- Auth Page --- */
-    .auth-form-container {
-        flex-direction: column;
-    }
-
-    /* --- Picks Page --- */
-    .team img {
-        width: 45px; /* Smaller logos */
-        height: 45px;
-    }
-    .team-name {
-        font-size: 0.9rem; /* Smaller team names */
-    }
-    .wager-controls {
-        flex-direction: column; /* Stack wager and double-up buttons */
-        gap: 15px;
-    }
-
-    /* --- Tables --- */
-    .pick-history-table {
-        font-size: 0.9rem; /* Make table text smaller */
-    }
-    .pick-history-table th, .pick-history-table td {
-        padding: 8px 5px; /* Reduce padding in table cells */
-    }
+    /* Other Mobile Adjustments */
+    .auth-form-container { flex-direction: column; }
+    .team img { width: 45px; height: 45px; }
+    .team-name { font-size: 0.9rem; }
+    .wager-controls { flex-direction: column; gap: 15px; }
+    .pick-history-table { font-size: 0.9rem; }
+    .pick-history-table th, .pick-history-table td { padding: 8px 5px; }
 }
