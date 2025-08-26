@@ -43,59 +43,79 @@ function parseCSV(csvText) {
     });
 }
 
+// =================================================================
+// *** THE CORRECTED DATE PARSING FUNCTION ***
+// =================================================================
 function getKickoffTimeAsDate(game) {
-    if (!game || !game.Date || !game.Time) return new Date('1970-01-01');
-    const datePart = game.Date.split(' ')[1]; 
-    const timePart = game.Time.replace(/\s/g, '').toUpperCase();
-    const dateTimeString = `${datePart} ${timePart} EDT`; 
-    return new Date(dateTimeString);
+    if (!game || !game.Date || !game.Time) {
+        // Return a date in the far past if data is invalid
+        return new Date('1970-01-01T00:00:00.000Z');
+    }
+
+    try {
+        const datePart = game.Date.split(' ')[1]; // "09/04/2025"
+        const timePart = game.Time; // "8:20 PM"
+
+        const [month, day, year] = datePart.split('/');
+        
+        let [time, modifier] = timePart.split(' ');
+        let [hours, minutes] = time.split(':');
+
+        hours = parseInt(hours, 10);
+
+        if (modifier && modifier.toUpperCase() === 'PM' && hours < 12) {
+            hours += 12;
+        }
+        if (modifier && modifier.toUpperCase() === 'AM' && hours === 12) {
+            hours = 0; // Midnight case
+        }
+
+        // The month is 0-indexed in JavaScript's Date constructor (0=Jan, 11=Dec)
+        const monthIndex = parseInt(month, 10) - 1;
+
+        // Constructing the date this way is cross-browser compatible and reliable
+        return new Date(year, monthIndex, day, hours, minutes);
+    } catch (e) {
+        console.error("Failed to parse date for game:", game, e);
+        return new Date('1970-01-01T00:00:00.000Z'); // Return past date on error
+    }
 }
 
 
 // =================================================================
-// *** FINAL & ROBUST WEEK DETERMINATION LOGIC ***
+// WEEK DETERMINATION LOGIC
 // =================================================================
 function determineCurrentWeek(games) {
     const now = new Date();
-    // For testing, you can force the current date:
-    // const now = new Date('2025-09-03T10:00:00.000Z'); // This would be the Wednesday before Week 1
-
     const regularSeasonGames = games.filter(g => g.Week && g.Week.startsWith('Week '));
     if (regularSeasonGames.length === 0) return 'Week 1';
 
-    // Create a map of when each week's games become available.
-    // The key is the week number (e.g., 2), and the value is the Date object for the Tuesday before.
     const weeklyRevealTimes = new Map();
 
     for (let i = 1; i <= 18; i++) {
         const weekString = `Week ${i}`;
         const firstGameOfWeek = regularSeasonGames.find(g => g.Week === weekString);
 
-        if (!firstGameOfWeek) continue; // Skip if no games for this week in data
+        if (!firstGameOfWeek) continue; 
 
         const firstGameKickoff = getKickoffTimeAsDate(firstGameOfWeek);
 
-        // Calculate the preceding Tuesday at 6 AM ET.
         const revealTime = new Date(firstGameKickoff);
-        const dayOfWeek = revealTime.getDay(); // 0=Sun, 1=Mon, 2=Tue, 3=Wed...
-        const daysToSubtract = (dayOfWeek - 2 + 7) % 7; // Days to go back to get to Tuesday
+        const dayOfWeek = revealTime.getDay(); 
+        const daysToSubtract = (dayOfWeek - 2 + 7) % 7; 
         
         revealTime.setDate(revealTime.getDate() - daysToSubtract);
-        revealTime.setHours(6, 0, 0, 0); // Set to 6 AM
+        revealTime.setHours(6, 0, 0, 0); 
 
         weeklyRevealTimes.set(i, revealTime);
     }
 
-    // Now, determine the active week by checking `now` against the reveal times.
-    let activeWeekNum = 1; // Default to Week 1
+    let activeWeekNum = 1; 
     for (let i = 1; i <= 18; i++) {
         const revealTime = weeklyRevealTimes.get(i);
         if (revealTime && now >= revealTime) {
-            // If the current time is after this week's reveal time, this week is a candidate.
-            // The loop will continue, and the last one to meet this condition will be the active one.
             activeWeekNum = i;
         } else {
-            // As soon as we find a week whose reveal time is in the future, we can stop.
             break;
         }
     }
