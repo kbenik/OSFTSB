@@ -45,31 +45,64 @@ function parseCSV(csvText) {
 
 function getKickoffTimeAsDate(game) {
     if (!game || !game.Date || !game.Time) return new Date('1970-01-01');
-    // Assuming format is like "Thu 09/04/2025" and "8:20 PM"
-    // We need to parse this carefully. Let's make it robust.
-    const datePart = game.Date.split(' ')[1]; // "09/04/2025"
-    // Standardize time format for Date parser
-    const timePart = game.Time.replace(' ', '').toUpperCase(); // "8:20PM"
-    // This format is more reliable for the Date constructor
-    const dateTimeString = `${datePart} ${timePart} EDT`; // Assume Eastern Time
+    const datePart = game.Date.split(' ')[1]; 
+    const timePart = game.Time.replace(/\s/g, '').toUpperCase();
+    const dateTimeString = `${datePart} ${timePart} EDT`; 
     return new Date(dateTimeString);
 }
 
+// =================================================================
+// *** NEW & IMPROVED WEEK DETERMINATION LOGIC ***
+// =================================================================
 function determineCurrentWeek(games) {
     const now = new Date();
-    // Filter for regular season games only
-    const regularSeasonGames = games.filter(game => game.Week && game.Week.startsWith('Week '));
-    if (regularSeasonGames.length === 0) return "Week 1"; // Default
+    const rolloverDay = 2; // Tuesday
+    const regularSeasonGames = games
+        .filter(g => g.Week.startsWith('Week '))
+        .sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
+
+    if (regularSeasonGames.length === 0) {
+        return 'Week 1'; // No games found, default
+    }
+
+    // If we are before the very first game of the season, show Week 1
+    const firstGameKickoff = getKickoffTimeAsDate(regularSeasonGames[0]);
+    if (now < firstGameKickoff) {
+        return 'Week 1';
+    }
+
+    let currentWeekNumber = 1;
+    // Iterate through weeks 1 to 18
+    for (let i = 1; i <= 18; i++) {
+        const weekString = `Week ${i}`;
+        const gamesInThisWeek = regularSeasonGames.filter(g => g.Week === weekString);
+        
+        if (gamesInThisWeek.length === 0) {
+            // If we've run out of weeks in the data, the last known week is active
+            break;
+        }
+
+        // Find the last game of the current week (usually Monday night)
+        const lastGameOfWeek = gamesInThisWeek[gamesInThisWeek.length - 1];
+        const lastGameKickoff = getKickoffTimeAsDate(lastGameOfWeek);
+        
+        // Calculate the rollover time: Tuesday at 6 AM ET after the last game
+        const rolloverTime = new Date(lastGameKickoff);
+        rolloverTime.setDate(rolloverTime.getDate() + (7 + rolloverDay - rolloverTime.getDay()) % 7);
+        rolloverTime.setHours(6, 0, 0, 0);
+
+        if (now < rolloverTime) {
+            currentWeekNumber = i;
+            break; // We found our active week
+        }
+        
+        // If we are past the rollover time for this week, the loop will continue to check the next week
+        currentWeekNumber = i + 1 > 18 ? 18 : i + 1;
+    }
     
-    // Sort games by date to find the first upcoming one
-    const sortedGames = [...regularSeasonGames].sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
-    
-    // Find the first game that hasn't started yet
-    const nextGame = sortedGames.find(game => getKickoffTimeAsDate(game) > now);
-    
-    // If we found an upcoming game, that's the current week. Otherwise, the season is over, show the last week.
-    return nextGame ? nextGame.Week : sortedGames[sortedGames.length - 1].Week;
+    return `Week ${currentWeekNumber}`;
 }
+
 
 // =================================================================
 // NAVIGATION & UI MANAGEMENT
@@ -125,9 +158,8 @@ function setupAuthListeners() {
         const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
         if (error) return alert('Error signing up: ' + error.message);
 
-        // Also create a profile for the new user
         const { error: profileError } = await supabase.from('profiles').insert([
-            { id: data.user.id, username: username, score: 0 } // 'score' is now on match_members
+            { id: data.user.id, username: username }
         ]);
         if (profileError) return alert('Error creating profile: ' + profileError.message);
         
@@ -146,7 +178,7 @@ function setupAuthListeners() {
 
 async function logoutUser() {
     await supabase.auth.signOut();
-    window.location.hash = ''; // Go to auth page on logout
+    window.location.hash = ''; 
 }
 
 // =================================================================
@@ -157,18 +189,17 @@ async function logoutUser() {
 async function displayDashboard() {
     if (!currentUser) return;
     
-    // Fetch pending picks and past picks in parallel
     const [pendingPicksRes, pastPicksRes] = await Promise.all([
         supabase.from('picks').select('*').eq('user_id', currentUser.id).is('is_correct', null),
         supabase.from('picks').select('*').eq('user_id', currentUser.id).not('is_correct', 'is', null).order('created_at', { ascending: false })
     ]);
     
-    // Render Pending Picks
     const pendingBody = document.getElementById('pending-picks-body');
     document.getElementById('pending-picks-week').textContent = activeWeek;
     pendingBody.innerHTML = '';
-    if (pendingPicksRes.data?.length > 0) {
-        pendingPicksRes.data.forEach(pick => {
+    const pendingPicksForWeek = pendingPicksRes.data?.filter(p => p.week === activeWeek) || [];
+    if (pendingPicksForWeek.length > 0) {
+        pendingPicksForWeek.forEach(pick => {
             const game = allGames.find(g => g['Game Id'] == pick.game_id);
             const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID: ${pick.game_id}`;
             const doubleUp = pick.is_double_up ? ' 🔥' : '';
@@ -178,7 +209,6 @@ async function displayDashboard() {
         pendingBody.innerHTML = `<tr><td colspan="3">No pending picks for ${activeWeek}.</td></tr>`;
     }
 
-    // Render Pick History
     const historyBody = document.getElementById('pick-history-body');
     historyBody.innerHTML = '';
     if (pastPicksRes.data?.length > 0) {
@@ -188,11 +218,8 @@ async function displayDashboard() {
             const resultClass = pick.is_correct ? 'correct' : 'incorrect';
             const resultText = pick.is_correct ? 'Correct' : 'Incorrect';
             
-            // Calculate points earned/lost
             let points = pick.is_correct ? pick.wager : (pick.wager * -2);
-            if (pick.is_double_up) {
-                points *= 2;
-            }
+            if (pick.is_double_up) points *= 2;
             const pointsText = points > 0 ? `+${points}` : points;
             
             historyBody.innerHTML += `<tr><td>${gameName} (${pick.week})</td><td>${pick.picked_team}</td><td class="${resultClass}">${resultText}</td><td>${pointsText}</td></tr>`;
@@ -211,7 +238,6 @@ async function displayPicksPage() {
         return;
     }
     
-    // Fetch this user's saved picks for the current week to populate the UI
     const { data: savedPicks, error } = await fetchUserPicksForWeek(activeWeek);
     if (error) {
         console.error("Could not fetch saved picks:", error);
@@ -219,7 +245,6 @@ async function displayPicksPage() {
         return;
     }
     
-    // Reset state from previous renders
     userPicks = {};
     userWagers = {};
     doubleUpPick = null;
@@ -236,18 +261,22 @@ async function displayPicksPage() {
     document.getElementById('picks-page-title').textContent = `${activeWeek} Picks`;
 
     const now = new Date();
-    const weeklyGames = allGames.filter(game => {
-        const kickoff = getKickoffTimeAsDate(game);
-        // Show only games for the active week that have NOT started yet
-        return game.Week === activeWeek && kickoff > now;
-    });
-
+    const weeklyGames = allGames.filter(game => game.Week === activeWeek);
+    
     if (weeklyGames.length === 0) {
-        gamesContainer.innerHTML = `<p class="card">All games for ${activeWeek} have started. No more picks can be made.</p>`;
+        gamesContainer.innerHTML = `<p class="card">There are no games scheduled for ${activeWeek}.</p>`;
         return;
     }
 
-    weeklyGames.forEach(game => {
+    // After filtering for the week, now filter out games that have started
+    const upcomingWeeklyGames = weeklyGames.filter(game => getKickoffTimeAsDate(game) > now);
+
+    if (upcomingWeeklyGames.length === 0) {
+        gamesContainer.innerHTML = `<p class="card">All games for ${activeWeek} have started. No more picks can be made.</p>`;
+        return;
+    }
+    
+    upcomingWeeklyGames.forEach(game => {
         const gameId = game['Game Id'];
         const awayName = game['Away Display Name'];
         const homeName = game['Home Display Name'];
@@ -272,16 +301,9 @@ async function displayPicksPage() {
         `;
         gamesContainer.appendChild(gameCard);
 
-        // Pre-populate selections from saved data
-        if (userPicks[gameId]) {
-            gameCard.querySelector(`.team[data-team-name="${userPicks[gameId]}"]`)?.classList.add('selected');
-        }
-        if (userWagers[gameId]) {
-            gameCard.querySelector(`.wager-btn[data-value="${userWagers[gameId]}"]`)?.classList.add('selected');
-        }
-        if (doubleUpPick === gameId) {
-            gameCard.querySelector('.double-up-btn').classList.add('selected');
-        }
+        if (userPicks[gameId]) gameCard.querySelector(`.team[data-team-name="${userPicks[gameId]}"]`)?.classList.add('selected');
+        if (userWagers[gameId]) gameCard.querySelector(`.wager-btn[data-value="${userWagers[gameId]}"]`)?.classList.add('selected');
+        if (doubleUpPick === gameId) gameCard.querySelector('.double-up-btn').classList.add('selected');
     });
 
     addGameCardEventListeners();
@@ -300,12 +322,12 @@ function addGameCardEventListeners() {
         card.querySelectorAll('.team').forEach(team => {
             team.addEventListener('click', () => {
                 const teamName = team.dataset.teamName;
-                if (userPicks[gameId] === teamName) { // If clicking the already selected team, deselect everything
+                if (userPicks[gameId] === teamName) {
                     userPicks[gameId] = undefined;
                     userWagers[gameId] = undefined;
                     if (doubleUpPick === gameId) doubleUpPick = null;
                     card.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
-                } else { // Select the new team
+                } else {
                     userPicks[gameId] = teamName;
                     card.querySelectorAll('.team').forEach(t => t.classList.remove('selected'));
                     team.classList.add('selected');
@@ -326,12 +348,12 @@ function addGameCardEventListeners() {
         card.querySelector('.double-up-btn').addEventListener('click', (e) => {
             if (!userPicks[gameId]) return alert("Please select a team before using your Double Up.");
             const wasSelected = e.target.classList.contains('selected');
-            allDoubleUpBtns.forEach(b => b.classList.remove('selected')); // Deselect all others
+            allDoubleUpBtns.forEach(b => b.classList.remove('selected'));
             if (!wasSelected) {
                 e.target.classList.add('selected');
                 doubleUpPick = gameId;
             } else {
-                doubleUpPick = null; // Toggle off
+                doubleUpPick = null;
             }
         });
     });
@@ -341,7 +363,6 @@ async function savePicks() {
     if (!currentUser) return alert('You must be logged in!');
     
     try {
-        // Validate that all selected picks have wagers
         for (const gameId in userPicks) {
             if (userPicks[gameId] && !userWagers[gameId]) {
                 const game = allGames.find(g => g['Game Id'] === gameId);
@@ -360,7 +381,6 @@ async function savePicks() {
                 week: activeWeek
             }));
 
-        // Find which picks were deselected and need to be removed
         const picksToDelete = [...initiallySavedPicks].filter(gameId => !userPicks[gameId]);
         
         if (picksToUpsert.length > 0) {
@@ -373,7 +393,7 @@ async function savePicks() {
         }
 
         alert('Your picks have been saved!');
-        displayPicksPage(); // Refresh the page to show saved indicators
+        displayPicksPage();
 
     } catch (error) {
         console.error("Save Picks Error:", error);
@@ -388,32 +408,31 @@ async function displayScoreboardPage() {
     const standingsBody = document.getElementById('scoreboard-standings-body');
     const picksContainer = document.getElementById('scoreboard-picks-container');
     
-    // 1. Find which matches the current user is a member of
     const { data: userMatches, error: userMatchesError } = await supabase
         .from('match_members')
         .select('matches (id, name)')
         .eq('user_id', currentUser.id);
 
     if (userMatchesError || !userMatches || userMatches.length === 0) {
-        standingsBody.innerHTML = '<tr><td colspan="3">You are not part of any matches yet.</td></tr>';
+        standingsBody.innerHTML = '<tr><td colspan="3">You are not part of any matches yet. Visit the Matches page to join or create one!</td></tr>';
         picksContainer.innerHTML = '';
+        selector.innerHTML = '';
         return;
     }
     
-    // 2. Populate the match selector dropdown
     selector.innerHTML = userMatches.map(m => `<option value="${m.matches.id}">${m.matches.name}</option>`).join('');
     
-    // 3. Add event listener to load data when a match is selected
-    selector.addEventListener('change', () => loadScoreboardForMatch(selector.value));
+    // Clear any previous listener to avoid duplicates
+    const newSelector = selector.cloneNode(true);
+    selector.parentNode.replaceChild(newSelector, selector);
+    newSelector.addEventListener('change', () => loadScoreboardForMatch(newSelector.value));
     
-    // 4. Load data for the initially selected match
-    loadScoreboardForMatch(selector.value);
+    loadScoreboardForMatch(newSelector.value);
 }
 
 async function loadScoreboardForMatch(matchId) {
     document.getElementById('scoreboard-week-title').textContent = activeWeek;
 
-    // 1. Get all members and their profiles/scores for the selected match
     const { data: members, error: membersError } = await supabase
         .from('match_members')
         .select('score, profiles (id, username)')
@@ -422,14 +441,12 @@ async function loadScoreboardForMatch(matchId) {
 
     if (membersError) return console.error("Error fetching members");
 
-    // 2. Render standings table
     const standingsBody = document.getElementById('scoreboard-standings-body');
     standingsBody.innerHTML = '';
     members.forEach((member, index) => {
         standingsBody.innerHTML += `<tr><td>${index + 1}</td><td>${member.profiles.username}</td><td>${member.score}</td></tr>`;
     });
     
-    // 3. Fetch all picks for the current week for these members
     const memberIds = members.map(m => m.profiles.id);
     const { data: allPicks, error: picksError } = await supabase
         .from('picks')
@@ -437,18 +454,15 @@ async function loadScoreboardForMatch(matchId) {
         .in('user_id', memberIds)
         .eq('week', activeWeek);
 
-    // 4. Group picks by user and render them
     const picksContainer = document.getElementById('scoreboard-picks-container');
     picksContainer.innerHTML = '';
     const picksByUser = members.map(m => ({
         username: m.profiles.username,
-        picks: allPicks.filter(p => p.profiles.username === m.profiles.username)
+        picks: allPicks?.filter(p => p.profiles.username === m.profiles.username) || []
     }));
 
     picksByUser.forEach(user => {
         let picksHtml = user.picks.map(pick => {
-            const game = allGames.find(g => g['Game Id'] == pick.game_id);
-            const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID ${pick.game_id}`;
             const doubleUp = pick.is_double_up ? ' 🔥' : '';
             return `<li><span>${pick.picked_team}</span> <span class="wager-indicator">${pick.wager}${doubleUp}</span></li>`;
         }).join('');
@@ -457,8 +471,7 @@ async function loadScoreboardForMatch(matchId) {
             <div class="scoreboard-user-picks">
                 <h3>${user.username}</h3>
                 <ul>${picksHtml || '<li>No picks made yet.</li>'}</ul>
-            </div>
-        `;
+            </div>`;
     });
 }
 
@@ -473,15 +486,8 @@ async function displayMatchesPage() {
         .select('id, name')
         .eq('is_public', true);
         
-    if (error) {
-        container.innerHTML = '<p>Could not load matches. Please try again.</p>';
-        return;
-    }
-    
-    if (matches.length === 0) {
-        container.innerHTML = '<p>No public matches found. Why not create one?</p>';
-        return;
-    }
+    if (error) return container.innerHTML = '<p>Could not load matches. Please try again.</p>';
+    if (matches.length === 0) return container.innerHTML = '<p>No public matches found. Why not create one?</p>';
     
     container.innerHTML = matches.map(match => `
         <div class="match-item">
@@ -504,9 +510,7 @@ async function joinMatch(matchId) {
         alert("Failed to join match: " + error.message);
     } else {
         alert("Successfully joined match!");
-        // Optional: switch to scoreboard page to see new match
         window.location.hash = '#scoreboard';
-        showPage('scoreboard-page');
     }
 }
 
@@ -516,7 +520,6 @@ async function createMatch() {
     const password = prompt("Create a password for your match (users will need this to join):");
     if (!password) return;
 
-    // Insert the new match
     const { data: newMatch, error: createError } = await supabase
         .from('matches')
         .insert({ name, password, created_by: currentUser.id, is_public: true })
@@ -525,14 +528,13 @@ async function createMatch() {
 
     if (createError) return alert("Error creating match: " + createError.message);
 
-    // Automatically add the creator as a member
     const { error: memberError } = await supabase
         .from('match_members')
         .insert({ match_id: newMatch.id, user_id: currentUser.id });
         
     if (!memberError) {
         alert("Match created successfully!");
-        displayMatchesPage(); // Refresh the list
+        displayMatchesPage();
     } else {
         alert("Match created, but failed to add you as a member: " + memberError.message);
     }
@@ -543,11 +545,9 @@ async function createMatch() {
 // =================================================================
 
 async function init() {
-    // 1. Setup static event listeners
     setupAuthListeners();
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
     
-    // Universal navigation handler
     document.body.addEventListener('click', (e) => {
         if (e.target.matches('#logout-btn')) logoutUser();
         if (e.target.matches('.join-match-btn')) joinMatch(e.target.dataset.matchId);
@@ -557,12 +557,19 @@ async function init() {
         if (navLink) {
             e.preventDefault();
             const pageId = navLink.getAttribute('href').substring(1);
-            window.location.hash = pageId; // Update hash for deep linking/refresh
-            showPage(pageId + '-page');
+            window.location.hash = pageId;
         }
     });
     
-    // 2. Fetch critical game data
+    window.addEventListener('hashchange', () => {
+        const pageId = (window.location.hash.substring(1) || 'home') + '-page';
+        if(currentUser) {
+            showPage(pageId);
+        } else {
+            showPage('auth-page');
+        }
+    });
+
     try {
         const response = await fetch(SHEET_URL);
         const csvText = await response.text();
@@ -574,19 +581,16 @@ async function init() {
         return;
     }
     
-    // 3. Handle auth state changes to drive the UI
     supabase.auth.onAuthStateChange((event, session) => {
         currentUser = session?.user || null;
         updateUserStatusUI();
         
-        // Routing logic
         const hash = window.location.hash.substring(1);
+        const pageId = (hash || 'home') + '-page';
+
         if (currentUser) {
-            // If logged in, show requested page or default to dashboard
-            const pageId = (hash && document.getElementById(hash + '-page')) ? hash + '-page' : 'home-page';
-            showPage(pageId);
+            showPage(document.getElementById(pageId) ? pageId : 'home-page');
         } else {
-            // If logged out, always show auth page
             showPage('auth-page');
         }
     });
