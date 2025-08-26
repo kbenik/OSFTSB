@@ -26,9 +26,12 @@ h1, h2 { color: var(--primary-color); }
 /* --- Header & Navigation (UPDATED) --- */
 header { background-color: var(--primary-color); color: white; padding: 0.5rem 0; box-shadow: var(--box-shadow); }
 .nav-container { display: flex; justify-content: space-between; align-items: center; }
-.nav-left { display: flex; align-items: center; gap: 20px; }
 #logo { font-weight: bold; font-size: 1.5rem !important; }
-#main-nav { display: flex; } /* Display links on desktop */
+#main-nav { 
+    display: flex; /* This makes it visible on desktop */
+    flex-grow: 1; /* Allows it to take up space */
+    padding-left: 20px; /* Adds space between logo and nav links */
+} 
 #main-nav ul { display: flex; list-style: none; margin: 0; padding: 0; gap: 10px; }
 #main-nav .nav-link, .nav-left .nav-link { color: white; text-decoration: none; font-weight: 500; padding: 5px 10px; border-radius: 5px; transition: background-color 0.3s; }
 #main-nav .nav-link:hover, .nav-left .nav-link:hover { background-color: var(--secondary-color); }
@@ -105,18 +108,31 @@ main { padding-top: 20px; }
     h1 { font-size: 1.5rem; }
 
     /* --- UPDATED Header & Navigation --- */
+    .nav-container {
+        flex-wrap: wrap; /* Allow items to wrap if needed */
+    }
     .nav-left { flex-direction: column; align-items: flex-start; gap: 5px; }
     #logo { padding: 0; }
-    .hamburger { display: flex; }
+    #user-status {
+        order: 3; /* Change flex order */
+    }
+    .hamburger {
+        display: flex; /* Show hamburger on mobile */
+        order: 2; /* Change flex order */
+    }
+
     
-    #main-nav {
+   #main-nav {
         display: none; /* Hide nav by default on mobile */
+        order: 4; /* Ensure it appears last in the flex order */
         position: absolute;
-        top: calc(100% + 10px); /* Position below the header */
+        top: 100%; /* Position below the header */
         left: 0;
+        right: 0; /* Make it full width */
         width: 100%;
         background-color: var(--primary-color);
         box-shadow: var(--box-shadow);
+        z-index: 1000; /* Ensure it's on top */
     }
     #main-nav.nav-open { display: block; } /* Show when toggled */
     #main-nav ul { flex-direction: column; width: 100%; }
