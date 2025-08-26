@@ -23,7 +23,6 @@ document.addEventListener('DOMContentLoaded', init);
 // =================================================================
 // UTILITY & HELPER FUNCTIONS
 // =================================================================
-
 function parseCSV(csvText) {
     const lines = csvText.trim().split('\n');
     if (lines.length < 2) return [];
@@ -38,14 +37,13 @@ function parseCSV(csvText) {
         return game;
     });
 }
-
 function getKickoffTimeAsDate(game) {
     if (!game || !game.Date || !game.Time) {
         return new Date('1970-01-01T00:00:00Z');
     }
     try {
-        const datePart = game.Date.split(' ')[1]; // "09/04/2025"
-        const timePart = game.Time; // "8:20 PM"
+        const datePart = game.Date.split(' ')[1];
+        const timePart = game.Time;
         const [month, day, year] = datePart.split('/');
         let [time, modifier] = timePart.split(' ');
         let [hours, minutes] = time.split(':');
@@ -53,27 +51,20 @@ function getKickoffTimeAsDate(game) {
         if (modifier && modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
         if (modifier && modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
         const monthIndex = parseInt(month, 10) - 1;
-
-        // Use Date.UTC to create a reliable timestamp, assuming source is US Eastern Time (UTC-4 during season)
         return new Date(Date.UTC(year, monthIndex, day, hours, minutes, 0) + (4 * 60 * 60 * 1000));
     } catch (e) {
         console.error("Failed to parse date for game:", game, e);
         return new Date('1970-01-01T00:00:00Z');
     }
 }
-
 function determineDefaultWeek(games) {
     const now = new Date();
     const regularSeasonGames = games.filter(g => g.Week && g.Week.startsWith('Week '));
     if (regularSeasonGames.length === 0) return 'Week 1';
-
     const nextGame = regularSeasonGames
         .sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b))
         .find(g => getKickoffTimeAsDate(g) > now);
-
     if (nextGame) return nextGame.Week;
-    
-    // If no future games, default to the last available week in the data
     const lastWeek = regularSeasonGames[regularSeasonGames.length - 1];
     return lastWeek ? lastWeek.Week : 'Week 1';
 }
@@ -86,16 +77,12 @@ function determineDefaultWeek(games) {
 function displayPicksPage() {
     const selector = document.getElementById('week-selector');
     const allWeeks = [...new Set(allGames.filter(g => g.Week.startsWith('Week ')).map(g => g.Week))];
-    
     allWeeks.sort((a, b) => parseInt(a.split(' ')[1]) - parseInt(b.split(' ')[1]));
-    
     selector.innerHTML = allWeeks.map(w => `<option value="${w}">${w}</option>`).join('');
     selector.value = defaultWeek;
-
     const newSelector = selector.cloneNode(true);
     selector.parentNode.replaceChild(newSelector, selector);
     newSelector.addEventListener('change', () => renderGamesForWeek(newSelector.value));
-
     renderGamesForWeek(defaultWeek);
 }
 
@@ -103,30 +90,23 @@ async function renderGamesForWeek(week) {
     const gamesContainer = document.getElementById('games-container');
     const saveButton = document.getElementById('save-picks-btn');
     document.getElementById('picks-page-title').textContent = `${week} Picks`;
-
     gamesContainer.innerHTML = '';
     saveButton.style.display = 'block';
-
     const now = new Date();
     const weeklyGames = allGames.filter(game => game.Week === week);
-
     if (weeklyGames.length === 0) {
         gamesContainer.innerHTML = `<p class="card">No games found for ${week}.</p>`;
         saveButton.style.display = 'none';
         return;
     }
-
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
         const kickoff = getKickoffTimeAsDate(game);
         const isLocked = kickoff < now;
-        
         const gameCard = document.createElement('div');
         gameCard.className = `game-card ${isLocked ? 'locked' : ''}`;
         gameCard.dataset.gameId = gameId;
-
         const displayTime = kickoff.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-
         gameCard.innerHTML = `
             <div class="team" data-team-name="${game['Away Display Name']}"><img src="${game['Away Logo']}" alt="${game['Away Display Name']}"><span class="team-name">${game['Away Display Name']}</span></div>
             <div class="game-separator">@</div>
@@ -138,11 +118,9 @@ async function renderGamesForWeek(week) {
                     ${[1, 2, 3, 4, 5].map(w => `<button class="wager-btn" data-value="${w}">${w}</button>`).join('')}
                 </div>
                 <button class="double-up-btn">2x Double Up</button>
-            </div>
-        `;
+            </div>`;
         gamesContainer.appendChild(gameCard);
     });
-    
     addGameCardEventListeners();
     await loadAndApplyUserPicks(week);
 }
@@ -151,15 +129,15 @@ async function loadAndApplyUserPicks(week) {
     try {
         const { data: savedPicks, error } = await fetchUserPicksForWeek(week);
         if (error) throw error;
-
-        userPicks = {}; userWagers = {}; doubleUpPick = null; initiallySavedPicks.clear();
-        
+        userPicks = {};
+        userWagers = {};
+        doubleUpPick = null;
+        initiallySavedPicks.clear();
         savedPicks.forEach(p => {
             initiallySavedPicks.add(p.game_id.toString());
             userPicks[p.game_id] = p.picked_team;
             userWagers[p.game_id] = p.wager;
             if (p.is_double_up) doubleUpPick = p.game_id.toString();
-            
             const card = document.querySelector(`.game-card[data-game-id="${p.game_id}"]`);
             if (card) {
                 card.querySelector(`.team[data-team-name="${p.picked_team}"]`)?.classList.add('selected');
@@ -172,7 +150,6 @@ async function loadAndApplyUserPicks(week) {
         console.error("Non-critical error fetching user picks:", err.message);
     }
 }
-
 
 // --- OTHER PAGE-SPECIFIC FUNCTIONS ---
 async function displayDashboard() {
@@ -212,6 +189,7 @@ async function displayDashboard() {
         historyBody.innerHTML = '<tr><td colspan="4">No pick history yet.</td></tr>';
     }
 }
+
 async function displayScoreboardPage() {
     const selector = document.getElementById('match-selector');
     const standingsBody = document.getElementById('scoreboard-standings-body');
@@ -229,6 +207,7 @@ async function displayScoreboardPage() {
     newSelector.addEventListener('change', () => loadScoreboardForMatch(newSelector.value));
     loadScoreboardForMatch(newSelector.value);
 }
+
 async function loadScoreboardForMatch(matchId) {
     document.getElementById('scoreboard-week-title').textContent = defaultWeek;
     const { data: members, error: membersError } = await supabase.from('match_members').select('score, profiles (id, username)').eq('match_id', matchId).order('score', { ascending: false });
@@ -254,6 +233,7 @@ async function loadScoreboardForMatch(matchId) {
         picksContainer.innerHTML += `<div class="scoreboard-user-picks"><h3>${user.username}</h3><ul>${picksHtml || '<li>No picks made yet.</li>'}</ul></div>`;
     });
 }
+
 async function displayMatchesPage() {
     const container = document.getElementById('matches-list-container');
     container.innerHTML = '<p>Loading public matches...</p>';
@@ -269,7 +249,7 @@ async function displayMatchesPage() {
 function addGameCardEventListeners() {
     const allDoubleUpBtns = document.querySelectorAll('.double-up-btn');
     document.querySelectorAll('.game-card').forEach(card => {
-        if (card.classList.contains('locked')) return; // Don't add listeners to locked cards
+        if (card.classList.contains('locked')) return;
         const gameId = card.dataset.gameId;
         card.querySelectorAll('.team').forEach(team => {
             team.addEventListener('click', () => {
@@ -306,6 +286,7 @@ function addGameCardEventListeners() {
         });
     });
 }
+
 async function savePicks() {
     if (!currentUser) return alert('You must be logged in!');
     try {
@@ -335,6 +316,7 @@ async function savePicks() {
         alert('Error: ' + error.message);
     }
 }
+
 async function joinMatch(matchId) {
     const password = prompt("Please enter the match password:");
     if (!password) return;
@@ -346,6 +328,7 @@ async function joinMatch(matchId) {
         window.location.hash = '#scoreboard';
     }
 }
+
 async function createMatch() {
     const name = prompt("Enter a name for your new match:");
     if (!name) return;
@@ -361,9 +344,33 @@ async function createMatch() {
         alert("Match created, but failed to add you as a member: " + memberError.message);
     }
 }
+
 async function fetchUserPicksForWeek(week) {
     if (!currentUser) return { data: [], error: null };
     return await supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('week', week);
+}
+
+// --- AUTH FUNCTIONS ---
+function setupAuthListeners() {
+    document.getElementById('sign-up-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('sign-up-username').value;
+        const email = document.getElementById('sign-up-email').value;
+        const password = document.getElementById('sign-up-password').value;
+        const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { username } } });
+        if (error) return alert('Error signing up: ' + error.message);
+        const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, username: username }]);
+        if (profileError) return alert('Error creating profile: ' + profileError.message);
+        alert('Sign up successful! Please check your email to confirm your account.');
+        e.target.reset();
+    });
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = document.getElementById('login-email').value;
+        const password = document.getElementById('login-password').value;
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) alert('Error logging in: ' + error.message);
+    });
 }
 
 // =================================================================
