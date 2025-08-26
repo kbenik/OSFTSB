@@ -77,13 +77,17 @@ function determineDefaultWeek(games) {
 function updateUserStatusUI() {
     const userStatusDiv = document.getElementById('user-status');
     const mainNav = document.getElementById('main-nav');
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+
     if (currentUser) {
         const username = currentUser.user_metadata?.username || currentUser.email;
         userStatusDiv.innerHTML = `<span>Welcome, ${username}</span><button id="logout-btn">Logout</button>`;
-        mainNav.classList.remove('hidden');
+        mainNav.style.display = ''; // Let CSS handle visibility
+        hamburgerBtn.style.display = '';
     } else {
         userStatusDiv.innerHTML = `<a href="#auth" class="nav-link">Login / Sign Up</a>`;
-        mainNav.classList.add('hidden');
+        mainNav.style.display = 'none';
+        hamburgerBtn.style.display = 'none';
     }
 }
 
@@ -147,8 +151,6 @@ async function logoutUser() {
 // =================================================================
 // PAGE-SPECIFIC LOGIC
 // =================================================================
-
-// --- PICKS PAGE ---
 function displayPicksPage() {
     const selector = document.getElementById('week-selector');
     const allWeeks = [...new Set(allGames.filter(g => g.Week.startsWith('Week ')).map(g => g.Week))];
@@ -442,7 +444,7 @@ async function fetchUserPicksForWeek(week) {
 }
 
 // =================================================================
-// INITIALIZATION & APP START (WITH HAMBURGER LOGIC)
+// INITIALIZATION & APP START
 // =================================================================
 async function init() {
     // *** NEW: Selectors for the hamburger menu ***
@@ -492,7 +494,7 @@ async function init() {
         document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
         return;
     }
-    
+
     supabase.auth.onAuthStateChange((event, session) => {
         currentUser = session?.user || null;
         updateUserStatusUI();
