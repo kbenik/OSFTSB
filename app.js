@@ -82,12 +82,12 @@ function updateUserStatusUI() {
     if (currentUser) {
         const username = currentUser.user_metadata?.username || currentUser.email;
         userStatusDiv.innerHTML = `<span>Welcome, ${username}</span><button id="logout-btn">Logout</button>`;
-        mainNav.style.display = ''; // Let CSS handle visibility
-        hamburgerBtn.style.display = '';
+        mainNav.classList.remove('hidden');
+        hamburgerBtn.classList.remove('hidden');
     } else {
         userStatusDiv.innerHTML = `<a href="#auth" class="nav-link">Login / Sign Up</a>`;
-        mainNav.style.display = 'none';
-        hamburgerBtn.style.display = 'none';
+        mainNav.classList.add('hidden');
+        hamburgerBtn.classList.add('hidden');
     }
 }
 
@@ -447,14 +447,12 @@ async function fetchUserPicksForWeek(week) {
 // INITIALIZATION & APP START
 // =================================================================
 async function init() {
-    // *** NEW: Selectors for the hamburger menu ***
     const hamburgerBtn = document.getElementById('hamburger-btn');
     const mainNav = document.getElementById('main-nav');
 
     setupAuthListeners();
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
 
-    // *** NEW: Hamburger click event listener ***
     hamburgerBtn.addEventListener('click', () => {
         mainNav.classList.toggle('nav-open');
     });
@@ -467,7 +465,6 @@ async function init() {
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
             e.preventDefault();
-            // *** NEW: Close mobile nav when a link is clicked ***
             if (mainNav.classList.contains('nav-open')) {
                 mainNav.classList.remove('nav-open');
             }
@@ -494,7 +491,7 @@ async function init() {
         document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
         return;
     }
-
+    
     supabase.auth.onAuthStateChange((event, session) => {
         currentUser = session?.user || null;
         updateUserStatusUI();
