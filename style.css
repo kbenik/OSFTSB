@@ -85,6 +85,11 @@ main { padding-top: 20px; }
 .save-picks-btn:hover { background-color: var(--secondary-color); }
 .game-card.locked { filter: grayscale(1); opacity: 0.6; pointer-events: none; }
 .game-card.locked .team:hover { transform: none; }
+.odds-info {
+    font-weight: 600;
+    color: var(--secondary-color);
+    margin-left: 5px; /* Adds a little space after the separator */
+}
 
 /* --- Matches & Scoreboard Styles (Unchanged) --- */
 #matches-list-container .match-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; }
