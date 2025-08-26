@@ -5,14 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OSFTSB Game</title>
     <link rel="stylesheet" href="style.css">
+    <!-- Ensure you are loading the Supabase library -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 
-      <header>
+    <header>
         <nav class="container">
             <div class="logo-nav-group">
-                <div id="logo" class="logo">OSFTSB</div>
+                <!-- Clickable Logo to go home -->
+                <a href="#home" id="logo" class="nav-link" style="font-weight: bold; font-size: 1.5rem;">OSFTSB</a>
                 <ul id="main-nav" class="hidden">
                     <li><a href="#home" class="nav-link">Dashboard</a></li>
                     <li><a href="#picks" class="nav-link">Picks</a></li>
@@ -21,13 +23,14 @@
                 </ul>
             </div>
             <div id="user-status">
+                <!-- This will be populated by JS -->
                 <a href="#auth" class="nav-link">Login / Sign Up</a>
             </div>
         </nav>
     </header>
 
     <main class="container">
-        <!-- Auth Page -->
+        <!-- Auth Page: No changes needed -->
         <section id="auth-page" class="page">
             <h1>Join the Game</h1>
             <div class="card">
@@ -52,9 +55,26 @@
         <!-- Home Page / Dashboard -->
         <section id="home-page" class="page">
             <h1>Dashboard</h1>
-            <div class="card score-display">
-                <h2>Your Current Score</h2>
-                <p class="score" id="user-score">0</p>
+             <!-- Score Chart container -->
+            <div class="card">
+                <h2>Score Trend</h2>
+                <div id="score-chart-container">
+                    <!-- A charting library like Chart.js would render here -->
+                    <p>Score chart coming soon!</p>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Pending Picks for <span id="pending-picks-week"></span></h2>
+                <table class="pick-history-table">
+                    <thead>
+                        <tr>
+                            <th>Game</th>
+                            <th>Your Pick</th>
+                            <th>Wager</th>
+                        </tr>
+                    </thead>
+                    <tbody id="pending-picks-body"></tbody>
+                </table>
             </div>
             <div class="card">
                 <h2>My Pick History</h2>
@@ -77,27 +97,34 @@
             <h1>Scoreboard</h1>
             <div class="card">
                 <h2 id="scoreboard-match-name">Match Standings</h2> 
+                <!-- Add a dropdown to select between matches -->
+                <select id="match-selector" style="margin-bottom: 20px;"></select>
                 <table class="pick-history-table">
                     <thead>
                         <tr>
                             <th>Rank</th>
                             <th>Username</th>
                             <th>Score</th>
-                            <th>$ Owed to Rank Above</th>
                         </tr>
                     </thead>
-                    <tbody id="scoreboard-body"></tbody>
+                    <tbody id="scoreboard-standings-body"></tbody>
                 </table>
+            </div>
+            <div class="card">
+                <h2><span id="scoreboard-week-title"></span> Picks</h2>
+                <div id="scoreboard-picks-container">
+                    <!-- All user picks for the selected match will be rendered here -->
+                </div>
             </div>
         </section>
 
         <!-- Matches List Page -->
         <section id="matches-page" class="page">
-             <div style="display: flex; justify-content: space-between; align-items: center;">
+             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h1>Public Matches</h1>
-                <!-- We can add a simple create button later -->
+                <button id="create-match-btn" class="button-primary">Create New Match</button>
             </div>
-            <div id="matches-list-container">
+            <div id="matches-list-container" class="card">
                 <p>Loading public matches...</p>
             </div>
         </section>
@@ -108,10 +135,11 @@
             <div id="games-container">
                 <p>Loading live game data...</p>
             </div>
-            <button id="save-picks-btn" class="save-picks-btn">Save Picks</button>
+            <button id="save-picks-btn" class="save-picks-btn">Save My Picks</button>
         </section>
     </main>
 
+    <!-- Load the final script -->
     <script src="app.js" type="module"></script>
 
 </body>
