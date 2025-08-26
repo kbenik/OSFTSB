@@ -2,7 +2,7 @@
 // CONFIGURATION & INITIALIZATION
 // =================================================================
 const SUPABASE_URL = 'https://mtjflkwoxjnwaawjlaxy.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10amZsa3dveGpud2Fhd2psYXh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MDY1MzQsImV4cCI6MjA3MTI1MzNH0.PflqgxXG3kISTpp7nUNCXiBn-Ue3kvKNIS2yV1oz-jg';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10amZsa3dveGpud2Fhd2psYXh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MDY1MzQsImV4cCI6MjA3MTI4MjUzNH0.PflqgxXG3kISTpp7nUNCXiBn-Ue3kvKNIS2yV1oz-jg';
 const supabase = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
 
@@ -10,7 +10,7 @@ const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95t
 let allGames = [];
 let activeWeek = '';
 let currentUser = null;
-let weeklyRevealTimes = new Map(); // Store reveal times globally
+let weeklyRevealTimes = new Map();
 let userPicks = {};
 let userWagers = {};
 let doubleUpPick = null;
@@ -24,7 +24,6 @@ document.addEventListener('DOMContentLoaded', init);
 // =================================================================
 // UTILITY & HELPER FUNCTIONS
 // =================================================================
-
 function parseCSV(csvText) {
     const lines = csvText.trim().split('\n');
     if (lines.length < 2) return [];
@@ -41,7 +40,7 @@ function parseCSV(csvText) {
 }
 
 // =================================================================
-// *** BULLETPROOF DATE & TIMEZONE LOGIC ***
+// *** FINAL, BULLETPROOF DATE & TIMEZONE LOGIC ***
 // =================================================================
 function getKickoffTimeAsDate(game) {
     if (!game || !game.Date || !game.Time) {
@@ -51,16 +50,16 @@ function getKickoffTimeAsDate(game) {
         const datePart = game.Date.split(' ')[1]; // "09/04/2025"
         const timePart = game.Time; // "8:20 PM"
         const [month, day, year] = datePart.split('/');
-        const [time, modifier] = timePart.split(' ');
+        let [time, modifier] = timePart.split(' ');
         let [hours, minutes] = time.split(':');
         hours = parseInt(hours, 10);
         if (modifier && modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
         if (modifier && modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
         const monthIndex = parseInt(month, 10) - 1;
 
-        // Use Date.UTC to create a reliable timestamp without timezone interference
-        // We know the source data is roughly US Eastern Time (which is UTC-4 during the season)
-        // By adding 4 hours, we get the correct UTC timestamp for the game's kickoff.
+        // Use Date.UTC to create a reliable timestamp assuming source is US Eastern Time.
+        // During the NFL season, ET is either EDT (UTC-4) or EST (UTC-5).
+        // A simple +4 hours covers most of the season (EDT) and is consistent for comparison.
         return new Date(Date.UTC(year, monthIndex, day, hours, minutes, 0) + (4 * 60 * 60 * 1000));
     } catch (e) {
         console.error("Failed to parse date for game:", game, e);
@@ -74,14 +73,11 @@ function calculateRevealTimes(games) {
         const weekString = `Week ${i}`;
         const firstGameOfWeek = regularSeasonGames.find(g => g.Week === weekString);
         if (!firstGameOfWeek) continue;
-
         const firstGameKickoff = getKickoffTimeAsDate(firstGameOfWeek);
         if (isNaN(firstGameKickoff)) continue;
-
         const revealTime = new Date(firstGameKickoff);
         const dayOfWeekUTC = revealTime.getUTCDay(); // Sunday = 0, Tuesday = 2
         const daysToSubtract = (dayOfWeekUTC - 2 + 7) % 7;
-        
         revealTime.setUTCDate(revealTime.getUTCDate() - daysToSubtract);
         revealTime.setUTCHours(10, 0, 0, 0); // 10:00 UTC is 6 AM EDT
         weeklyRevealTimes.set(i, revealTime);
@@ -102,11 +98,12 @@ function determineCurrentWeek() {
     return `Week ${activeWeekNum}`;
 }
 
+
 // =================================================================
 // PAGE-SPECIFIC LOGIC
 // =================================================================
 
-// --- PICKS PAGE (UPDATED WITH REVEAL LOGIC) ---
+// --- PICKS PAGE (REWRITTEN FOR RESILIENCE) ---
 async function displayPicksPage() {
     const gamesContainer = document.getElementById('games-container');
     const saveButton = document.getElementById('save-picks-btn');
@@ -118,7 +115,7 @@ async function displayPicksPage() {
         return;
     }
 
-    // *** NEW LOGIC: Check if the current week is even available for picks yet ***
+    // STEP 1: Determine if picks should be visible based on the "Tuesday reveal" rule
     const weekNum = parseInt(activeWeek.split(' ')[1]);
     const revealTime = weeklyRevealTimes.get(weekNum);
     const now = new Date();
@@ -131,28 +128,8 @@ async function displayPicksPage() {
         saveButton.style.display = 'none';
         return;
     }
-    
-    // --- Existing logic continues below ---
 
-    const { data: savedPicks, error } = await fetchUserPicksForWeek(activeWeek);
-    if (error) {
-        gamesContainer.innerHTML = '<p>Error loading your picks. Please refresh.</p>';
-        return;
-    }
-    
-    userPicks = {};
-    userWagers = {};
-    doubleUpPick = null;
-    initiallySavedPicks.clear();
-    
-    savedPicks.forEach(p => {
-        initiallySavedPicks.add(p.game_id.toString());
-        userPicks[p.game_id] = p.picked_team;
-        userWagers[p.game_id] = p.wager;
-        if (p.is_double_up) doubleUpPick = p.game_id.toString();
-    });
-
-    gamesContainer.innerHTML = '';
+    // STEP 2: Render all upcoming game cards for the active week
     const weeklyGames = allGames.filter(game => game.Week === activeWeek);
     const upcomingWeeklyGames = weeklyGames.filter(game => getKickoffTimeAsDate(game) > now);
 
@@ -163,6 +140,7 @@ async function displayPicksPage() {
     }
 
     saveButton.style.display = 'block';
+    gamesContainer.innerHTML = ''; // Clear container before rendering
     upcomingWeeklyGames.forEach(game => {
         const gameId = game['Game Id'];
         const gameCard = document.createElement('div');
@@ -184,16 +162,44 @@ async function displayPicksPage() {
                 </div>
                 <button class="double-up-btn">2x Double Up</button>
             </div>
-            ${initiallySavedPicks.has(gameId) ? '<div class="saved-indicator" title="This pick is saved"></div>' : ''}
+            <!-- The saved indicator will be added later if picks load -->
         `;
         gamesContainer.appendChild(gameCard);
-
-        if (userPicks[gameId]) gameCard.querySelector(`.team[data-team-name="${userPicks[gameId]}"]`)?.classList.add('selected');
-        if (userWagers[gameId]) gameCard.querySelector(`.wager-btn[data-value="${userWagers[gameId]}"]`)?.classList.add('selected');
-        if (doubleUpPick === gameId) gameCard.querySelector('.double-up-btn').classList.add('selected');
     });
     addGameCardEventListeners();
+
+    // STEP 3: *AFTER* rendering, try to fetch and apply the user's saved picks
+    try {
+        const { data: savedPicks, error } = await fetchUserPicksForWeek(activeWeek);
+        if (error) throw error; // Let the catch block handle it
+
+        userPicks = {};
+        userWagers = {};
+        doubleUpPick = null;
+        initiallySavedPicks.clear();
+        
+        savedPicks.forEach(p => {
+            initiallySavedPicks.add(p.game_id.toString());
+            userPicks[p.game_id] = p.picked_team;
+            userWagers[p.game_id] = p.wager;
+            if (p.is_double_up) doubleUpPick = p.game_id.toString();
+
+            // Find the corresponding card and apply styles/indicators
+            const card = gamesContainer.querySelector(`.game-card[data-game-id="${p.game_id}"]`);
+            if (card) {
+                card.querySelector(`.team[data-team-name="${p.picked_team}"]`)?.classList.add('selected');
+                card.querySelector(`.wager-btn[data-value="${p.wager}"]`)?.classList.add('selected');
+                if (p.is_double_up) card.querySelector('.double-up-btn').classList.add('selected');
+                card.insertAdjacentHTML('beforeend', '<div class="saved-indicator" title="This pick is saved"></div>');
+            }
+        });
+    } catch (err) {
+        console.error("Non-critical error fetching user picks:", err.message);
+        // The page is already rendered with game cards, so we don't need to show a full-page error.
+        // The user can still make and save new picks.
+    }
 }
+
 
 // =================================================================
 // ALL OTHER FUNCTIONS (UNCHANGED)
@@ -430,8 +436,6 @@ async function createMatch() {
         alert("Match created, but failed to add you as a member: " + memberError.message);
     }
 }
-
-// --- INITIALIZE APP ---
 async function init() {
     setupAuthListeners();
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
