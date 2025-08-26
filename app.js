@@ -51,57 +51,58 @@ function getKickoffTimeAsDate(game) {
     return new Date(dateTimeString);
 }
 
+
 // =================================================================
-// *** NEW & IMPROVED WEEK DETERMINATION LOGIC ***
+// *** FINAL & ROBUST WEEK DETERMINATION LOGIC ***
 // =================================================================
 function determineCurrentWeek(games) {
     const now = new Date();
-    const rolloverDay = 2; // Tuesday
-    const regularSeasonGames = games
-        .filter(g => g.Week.startsWith('Week '))
-        .sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
+    // For testing, you can force the current date:
+    // const now = new Date('2025-09-03T10:00:00.000Z'); // This would be the Wednesday before Week 1
 
-    if (regularSeasonGames.length === 0) {
-        return 'Week 1'; // No games found, default
-    }
+    const regularSeasonGames = games.filter(g => g.Week && g.Week.startsWith('Week '));
+    if (regularSeasonGames.length === 0) return 'Week 1';
 
-    // If we are before the very first game of the season, show Week 1
-    const firstGameKickoff = getKickoffTimeAsDate(regularSeasonGames[0]);
-    if (now < firstGameKickoff) {
-        return 'Week 1';
-    }
+    // Create a map of when each week's games become available.
+    // The key is the week number (e.g., 2), and the value is the Date object for the Tuesday before.
+    const weeklyRevealTimes = new Map();
 
-    let currentWeekNumber = 1;
-    // Iterate through weeks 1 to 18
     for (let i = 1; i <= 18; i++) {
         const weekString = `Week ${i}`;
-        const gamesInThisWeek = regularSeasonGames.filter(g => g.Week === weekString);
+        const firstGameOfWeek = regularSeasonGames.find(g => g.Week === weekString);
+
+        if (!firstGameOfWeek) continue; // Skip if no games for this week in data
+
+        const firstGameKickoff = getKickoffTimeAsDate(firstGameOfWeek);
+
+        // Calculate the preceding Tuesday at 6 AM ET.
+        const revealTime = new Date(firstGameKickoff);
+        const dayOfWeek = revealTime.getDay(); // 0=Sun, 1=Mon, 2=Tue, 3=Wed...
+        const daysToSubtract = (dayOfWeek - 2 + 7) % 7; // Days to go back to get to Tuesday
         
-        if (gamesInThisWeek.length === 0) {
-            // If we've run out of weeks in the data, the last known week is active
+        revealTime.setDate(revealTime.getDate() - daysToSubtract);
+        revealTime.setHours(6, 0, 0, 0); // Set to 6 AM
+
+        weeklyRevealTimes.set(i, revealTime);
+    }
+
+    // Now, determine the active week by checking `now` against the reveal times.
+    let activeWeekNum = 1; // Default to Week 1
+    for (let i = 1; i <= 18; i++) {
+        const revealTime = weeklyRevealTimes.get(i);
+        if (revealTime && now >= revealTime) {
+            // If the current time is after this week's reveal time, this week is a candidate.
+            // The loop will continue, and the last one to meet this condition will be the active one.
+            activeWeekNum = i;
+        } else {
+            // As soon as we find a week whose reveal time is in the future, we can stop.
             break;
         }
-
-        // Find the last game of the current week (usually Monday night)
-        const lastGameOfWeek = gamesInThisWeek[gamesInThisWeek.length - 1];
-        const lastGameKickoff = getKickoffTimeAsDate(lastGameOfWeek);
-        
-        // Calculate the rollover time: Tuesday at 6 AM ET after the last game
-        const rolloverTime = new Date(lastGameKickoff);
-        rolloverTime.setDate(rolloverTime.getDate() + (7 + rolloverDay - rolloverTime.getDay()) % 7);
-        rolloverTime.setHours(6, 0, 0, 0);
-
-        if (now < rolloverTime) {
-            currentWeekNumber = i;
-            break; // We found our active week
-        }
-        
-        // If we are past the rollover time for this week, the loop will continue to check the next week
-        currentWeekNumber = i + 1 > 18 ? 18 : i + 1;
     }
-    
-    return `Week ${currentWeekNumber}`;
+
+    return `Week ${activeWeekNum}`;
 }
+
 
 
 // =================================================================
@@ -268,7 +269,6 @@ async function displayPicksPage() {
         return;
     }
 
-    // After filtering for the week, now filter out games that have started
     const upcomingWeeklyGames = weeklyGames.filter(game => getKickoffTimeAsDate(game) > now);
 
     if (upcomingWeeklyGames.length === 0) {
@@ -422,7 +422,6 @@ async function displayScoreboardPage() {
     
     selector.innerHTML = userMatches.map(m => `<option value="${m.matches.id}">${m.matches.name}</option>`).join('');
     
-    // Clear any previous listener to avoid duplicates
     const newSelector = selector.cloneNode(true);
     selector.parentNode.replaceChild(newSelector, selector);
     newSelector.addEventListener('change', () => loadScoreboardForMatch(newSelector.value));
