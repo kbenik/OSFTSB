@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OSFTSB Game</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Ensure you are loading the Supabase library -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
@@ -13,7 +12,6 @@
     <header>
         <nav class="container">
             <div class="logo-nav-group">
-                <!-- Clickable Logo to go home -->
                 <a href="#home" id="logo" class="nav-link" style="font-weight: bold; font-size: 1.5rem;">OSFTSB</a>
                 <ul id="main-nav" class="hidden">
                     <li><a href="#home" class="nav-link">Dashboard</a></li>
@@ -23,70 +21,46 @@
                 </ul>
             </div>
             <div id="user-status">
-                <!-- This will be populated by JS -->
                 <a href="#auth" class="nav-link">Login / Sign Up</a>
             </div>
         </nav>
     </header>
 
     <main class="container">
-        <!-- Auth Page: No changes needed -->
+        <!-- Auth Page -->
         <section id="auth-page" class="page">
             <h1>Join the Game</h1>
-            <div class="card">
-                <div class="auth-form-container">
-                    <form id="sign-up-form" class="auth-form">
-                        <h2>Sign Up</h2>
-                        <input type="text" id="sign-up-username" placeholder="Username" required>
-                        <input type="email" id="sign-up-email" placeholder="Email" required>
-                        <input type="password" id="sign-up-password" placeholder="Password" required>
-                        <button type="submit">Sign Up</button>
-                    </form>
-                    <form id="login-form" class="auth-form">
-                        <h2>Login</h2>
-                        <input type="email" id="login-email" placeholder="Email" required>
-                        <input type="password" id="login-password" placeholder="Password" required>
-                        <button type="submit">Login</button>
-                    </form>
-                </div>
+            <div class="card auth-form-container">
+                <form id="sign-up-form" class="auth-form">
+                    <h2>Sign Up</h2>
+                    <input type="text" id="sign-up-username" placeholder="Username" required>
+                    <input type="email" id="sign-up-email" placeholder="Email" required>
+                    <input type="password" id="sign-up-password" placeholder="Password" required>
+                    <button type="submit">Sign Up</button>
+                </form>
+                <form id="login-form" class="auth-form">
+                    <h2>Login</h2>
+                    <input type="email" id="login-email" placeholder="Email" required>
+                    <input type="password" id="login-password" placeholder="Password" required>
+                    <button type="submit">Login</button>
+                </form>
             </div>
         </section>
 
         <!-- Home Page / Dashboard -->
         <section id="home-page" class="page">
             <h1>Dashboard</h1>
-             <!-- Score Chart container -->
-            <div class="card">
-                <h2>Score Trend</h2>
-                <div id="score-chart-container">
-                    <!-- A charting library like Chart.js would render here -->
-                    <p>Score chart coming soon!</p>
-                </div>
-            </div>
             <div class="card">
                 <h2>Pending Picks for <span id="pending-picks-week"></span></h2>
                 <table class="pick-history-table">
-                    <thead>
-                        <tr>
-                            <th>Game</th>
-                            <th>Your Pick</th>
-                            <th>Wager</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Game</th><th>Your Pick</th><th>Wager</th></tr></thead>
                     <tbody id="pending-picks-body"></tbody>
                 </table>
             </div>
             <div class="card">
                 <h2>My Pick History</h2>
                 <table class="pick-history-table">
-                    <thead>
-                        <tr>
-                            <th>Game</th>
-                            <th>Your Pick</th>
-                            <th>Result</th>
-                            <th>Points</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Game</th><th>Your Pick</th><th>Result</th><th>Points</th></tr></thead>
                     <tbody id="pick-history-body"></tbody>
                 </table>
             </div>
@@ -96,42 +70,37 @@
         <section id="scoreboard-page" class="page">
             <h1>Scoreboard</h1>
             <div class="card">
-                <h2 id="scoreboard-match-name">Match Standings</h2> 
-                <!-- Add a dropdown to select between matches -->
-                <select id="match-selector" style="margin-bottom: 20px;"></select>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <h2 id="scoreboard-match-name">Match Standings</h2> 
+                    <select id="match-selector"></select>
+                </div>
                 <table class="pick-history-table">
-                    <thead>
-                        <tr>
-                            <th>Rank</th>
-                            <th>Username</th>
-                            <th>Score</th>
-                        </tr>
-                    </thead>
+                    <thead><tr><th>Rank</th><th>Username</th><th>Score</th></tr></thead>
                     <tbody id="scoreboard-standings-body"></tbody>
                 </table>
             </div>
             <div class="card">
                 <h2><span id="scoreboard-week-title"></span> Picks</h2>
-                <div id="scoreboard-picks-container">
-                    <!-- All user picks for the selected match will be rendered here -->
-                </div>
+                <div id="scoreboard-picks-container"></div>
             </div>
         </section>
 
-        <!-- Matches List Page -->
+        <!-- Matches Page -->
         <section id="matches-page" class="page">
              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                 <h1>Public Matches</h1>
                 <button id="create-match-btn" class="button-primary">Create New Match</button>
             </div>
-            <div id="matches-list-container" class="card">
-                <p>Loading public matches...</p>
-            </div>
+            <div id="matches-list-container" class="card"></div>
         </section>
         
         <!-- Weekly Picks Page -->
         <section id="picks-page" class="page">
-            <h1 id="picks-page-title">Weekly Picks</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h1 id="picks-page-title">Weekly Picks</h1>
+                <!-- *** NEW: Week Selector Dropdown *** -->
+                <select id="week-selector"></select>
+            </div>
             <div id="games-container">
                 <p>Loading live game data...</p>
             </div>
@@ -139,7 +108,6 @@
         </section>
     </main>
 
-    <!-- Load the final script -->
     <script src="app.js" type="module"></script>
 
 </body>
