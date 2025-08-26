@@ -184,11 +184,13 @@ async function renderGamesForWeek(week) {
         gameCard.className = `game-card ${isLocked ? 'locked' : ''}`;
         gameCard.dataset.gameId = gameId;
         const displayTime = kickoff.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        const oddsText = game.Odds ? ` | <span class="odds-info">${game.Odds}</span>` : '';
+
         gameCard.innerHTML = `
             <div class="team" data-team-name="${game['Away Display Name']}"><img src="${game['Away Logo']}" alt="${game['Away Display Name']}"><span class="team-name">${game['Away Display Name']}</span></div>
             <div class="game-separator">@</div>
             <div class="team" data-team-name="${game['Home Display Name']}"><img src="${game['Home Logo']}" alt="${game['Home Display Name']}"><span class="team-name">${game['Home Display Name']}</span></div>
-            <div class="game-info">${displayTime}</div>
+            <div class="game-info">${displayTime}${oddsText}</div>
             <div class="wager-controls">
                 <div class="wager-options">
                     <span>Wager:</span>
@@ -196,7 +198,6 @@ async function renderGamesForWeek(week) {
                 </div>
                 <button class="double-up-btn">2x Double Up</button>
             </div>`;
-        gamesContainer.appendChild(gameCard);
     });
     addGameCardEventListeners();
     await loadAndApplyUserPicks(week);
