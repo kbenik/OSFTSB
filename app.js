@@ -453,9 +453,10 @@ async function init() {
     setupAuthListeners();
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
 
-    hamburgerBtn.addEventListener('click', () => {
-        mainNav.classList.toggle('nav-open');
-    });
+    hamburgerBtn.addEventListener('click', (e) => {
+    e.stopPropagation(); // This is the key: it stops the click from bubbling up.
+    mainNav.classList.toggle('nav-open');
+})
 
     document.body.addEventListener('click', (e) => {
         if (e.target.matches('#logout-btn')) logoutUser();
