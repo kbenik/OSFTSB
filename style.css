@@ -153,3 +153,150 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     .pick-history-table { font-size: 0.9rem; }
     .pick-history-table th, .pick-history-table td { padding: 8px 5px; }
 }
+/* Scoreboard Chart Styles */
+.chart-container {
+    position: relative;
+    height: 300px; /* Adjust height as needed */
+    width: 100%;
+}
+
+/* Run Sheet Table Styles */
+.run-sheet-container {
+    width: 100%;
+    overflow-x: auto; /* Allows horizontal scrolling on small screens */
+}
+
+.run-sheet-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed; /* Helps with column width */
+}
+
+.run-sheet-table th,
+.run-sheet-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: center;
+    position: relative; /* Needed for the emoji overlay */
+    font-size: 0.8rem;
+    word-wrap: break-word;
+}
+
+.run-sheet-table th {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 600;
+    padding: 12px 8px;
+    /* Allows player names to rotate if needed, but not required */
+    /* white-space: nowrap; */
+}
+
+.run-sheet-table .pick-cell {
+    font-weight: bold;
+    color: #333;
+}
+
+/* Wager Background Color Classes */
+.wager-1 { background-color: rgba(213, 10, 10, 0.15); }
+.wager-2 { background-color: rgba(213, 10, 10, 0.3); }
+.wager-3 { background-color: rgba(213, 10, 10, 0.5); }
+.wager-4 { background-color: rgba(213, 10, 10, 0.75); }
+.wager-5 { background-color: rgba(213, 10, 10, 1); color: white; }
+
+/* Double Up Fire Emoji Overlay */
+.pick-cell.double-up::after {
+    content: '🔥';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 1.5rem;
+    opacity: 0.8;
+    text-shadow: 0 0 4px black;
+}
+
+/* Locked Pick Style */
+.locked-pick {
+    background-color: #f0f0f0;
+    color: #aaa;
+}
+.locked-pick i {
+    font-style: normal;
+}
+
+@media (max-width: 768px) {
+    .run-sheet-table th,
+    .run-sheet-table td {
+        font-size: 0.7rem;
+        padding: 6px 4px;
+    }
+    .run-sheet-table .game-matchup-cell {
+        width: 120px;
+    }
+}
+/* Updated Run Sheet Cell for Matchups */
+.run-sheet-table .game-matchup-cell {
+    text-align: left;
+    font-weight: 500;
+    background-color: #f9f9f9;
+    width: 220px; /* Increased width to fit logos and scores */
+    padding: 5px;
+    vertical-align: middle;
+}
+
+/* Updated Run Sheet Table Styles */
+.run-sheet-table .game-matchup-cell {
+    text-align: left;
+    font-weight: 500;
+    background-color: #f9f9f9;
+    width: 150px; /* Adjusted width */
+    padding: 5px 8px;
+    vertical-align: middle;
+}
+
+.run-sheet-table .status-cell,
+.run-sheet-table .odds-cell {
+    font-size: 0.8rem;
+    color: #555;
+    background-color: #f9f9f9;
+    width: 80px; /* Give them a fixed width */
+    vertical-align: middle;
+}
+
+/* Flex container for each team's info (logo, name, score) */
+.matchup-team-container {
+    display: flex;
+    align-items: center;
+    padding: 4px 0;
+}
+
+.team-logo {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+.team-info-wrapper {
+    display: flex;
+    align-items: baseline; /* Aligns code and score nicely */
+    gap: 6px;
+}
+
+.team-code {
+    font-weight: bold;
+    font-size: 0.9rem;
+}
+
+.team-score {
+    font-size: 0.85rem;
+    color: #333;
+}
+.button-secondary {
+    padding: 8px 16px;
+    background-color: #e0e0e0; /* A light grey */
+    color: #757575; /* A darker grey for text */
+    border: none;
+    border-radius: 5px;
+    font-size: 1rem;
+    cursor: not-allowed; /* Show a "not allowed" cursor on hover */
+}
