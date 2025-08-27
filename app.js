@@ -455,8 +455,9 @@ async function init() {
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
 
     hamburgerBtn.addEventListener('click', (e) => {
-    e.stopPropagation(); // This is the key: it stops the click from bubbling up.
+    e.stopPropagation(); 
     mainNav.classList.toggle('nav-open');
+    document.body.classList.toggle('nav-open-body'); // Add this line
 })
 
     document.body.addEventListener('click', (e) => {
@@ -469,6 +470,7 @@ async function init() {
             e.preventDefault();
             if (mainNav.classList.contains('nav-open')) {
                 mainNav.classList.remove('nav-open');
+                 document.body.classList.remove('nav-open-body');
             }
             window.location.hash = navLink.getAttribute('href').substring(1);
         }
