@@ -43,7 +43,7 @@ header { background-color: var(--primary-color); color: white; padding: 0.5rem 0
 .hamburger-line { width: 25px; height: 3px; background-color: white; border-radius: 3px; transition: transform 0.3s; }
 
 /* --- Main content and Card styles are unchanged --- */
-main { padding-top: 20px; position: relative; z-index: 5; }
+main { padding-top: 20px; position: relative; z-index: 5; transition: transform 0.3s ease-in-out;}
 .page { display: none; }
 .page.active { display: block; }
 .card { background-color: var(--card-background); border-radius: var(--border-radius); box-shadow: var(--box-shadow); padding: 20px; margin-bottom: 20px; }
