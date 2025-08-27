@@ -24,6 +24,9 @@
                 <li><a href="#matches" class="nav-link">Matches</a></li>
             </ul>
         </nav>
+        <div id="global-selector-container" class="hidden">
+            <select id="global-match-selector"></select>
+        </div>
         <div id="user-status">
             <!-- Populated by JS -->
         </div>
@@ -80,8 +83,7 @@
             <h1>Scoreboard</h1>
             <div class="card">
                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                    <h2 id="scoreboard-match-name">Match Standings</h2> 
-                    <select id="match-selector"></select>
+                    <h2 id="scoreboard-match-name">Match Standings</h2>
                 </div>
                 <!-- Container for the Score Chart -->
                 <div class="chart-container">
@@ -108,9 +110,11 @@
         
         <!-- Weekly Picks Page -->
         <section id="picks-page" class="page">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="page-controls-wrapper">
                 <h1 id="picks-page-title">Weekly Picks</h1>
-                <select id="week-selector"></select>
+                <div class="selectors-container">
+                    <select id="week-selector"></select>
+                </div>
             </div>
             <div id="games-container">
                 <p>Loading live game data...</p>
