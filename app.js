@@ -15,6 +15,7 @@ let userWagers = {};
 let doubleUpPick = null;
 let initiallySavedPicks = new Set();
 let scoreChartInstance = null;
+let currentSelectedMatchId = null;
 
 // =================================================================
 // EVENT LISTENERS
@@ -152,31 +153,51 @@ async function logoutUser() {
 // =================================================================
 // PAGE-SPECIFIC LOGIC
 // =================================================================
-function displayPicksPage() {
-    const selector = document.getElementById('week-selector');
+async function displayPicksPage() {
+    const weekSelector = document.getElementById('week-selector');
+    
+    // 1. Populate Week Selector (as before)
     const allWeeks = [...new Set(allGames.filter(g => g.Week.startsWith('Week ')).map(g => g.Week))];
     allWeeks.sort((a, b) => parseInt(a.split(' ')[1]) - parseInt(b.split(' ')[1]));
-    selector.innerHTML = allWeeks.map(w => `<option value="${w}">${w}</option>`).join('');
-    selector.value = defaultWeek;
-    const newSelector = selector.cloneNode(true);
-    selector.parentNode.replaceChild(newSelector, selector);
-    newSelector.addEventListener('change', () => renderGamesForWeek(newSelector.value));
-    renderGamesForWeek(defaultWeek);
+    weekSelector.innerHTML = allWeeks.map(w => `<option value="${w}">${w}</option>`).join('');
+    weekSelector.value = defaultWeek;
+
+    // 2. The match selector logic is GONE from here.
+
+    // 3. Function to handle re-rendering when week changes
+    const renderPicks = () => {
+        if (currentSelectedMatchId) { // Check if a match is selected globally
+            renderGamesForWeek(weekSelector.value, currentSelectedMatchId);
+        } else {
+            // Handle case where user isn't in any matches
+            document.getElementById('games-container').innerHTML = `<div class="card"><p>You must join a match on the 'Matches' page before you can make picks!</p></div>`;
+            document.getElementById('save-picks-btn').style.display = 'none';
+        }
+    };
+    weekSelector.addEventListener('change', renderPicks);
+    renderPicks();
 }
 
-async function renderGamesForWeek(week) {
+async function renderGamesForWeek(week, matchId) { // Now accepts matchId
     const gamesContainer = document.getElementById('games-container');
     const saveButton = document.getElementById('save-picks-btn');
     document.getElementById('picks-page-title').textContent = `${week} Picks`;
-    gamesContainer.innerHTML = '';
+
+    gamesContainer.innerHTML = '<p>Loading games...</p>';
     saveButton.style.display = 'block';
+
     const now = new Date();
     const weeklyGames = allGames.filter(game => game.Week === week);
+
     if (weeklyGames.length === 0) {
         gamesContainer.innerHTML = `<p class="card">No games found for ${week}.</p>`;
         saveButton.style.display = 'none';
         return;
     }
+    
+    // Clear the container before adding new cards
+    gamesContainer.innerHTML = ''; 
+
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
         const kickoff = getKickoffTimeAsDate(game);
@@ -199,33 +220,42 @@ async function renderGamesForWeek(week) {
                 </div>
                 <button class="double-up-btn">2x Double Up</button>
             </div>`;
-
-        // --- FIX: This line was missing ---
-        gamesContainer.appendChild(gameCard); 
+        gamesContainer.appendChild(gameCard);
     });
+    
     addGameCardEventListeners();
-    await loadAndApplyUserPicks(week);
+    await loadAndApplyUserPicks(week, matchId); // Pass matchId to loader
 }
 
-async function loadAndApplyUserPicks(week) {
+async function loadAndApplyUserPicks(week, matchId) { // Now accepts matchId
     try {
-        const { data: savedPicks, error } = await fetchUserPicksForWeek(week);
+        // The query now includes a filter for match_id
+        const { data: savedPicks, error } = await supabase
+            .from('picks')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .eq('week', week)
+            .eq('match_id', matchId);
+
         if (error) throw error;
+        
+        // Reset state for the new context (week/match)
         userPicks = {};
         userWagers = {};
         doubleUpPick = null;
         initiallySavedPicks.clear();
+
         savedPicks.forEach(p => {
             initiallySavedPicks.add(p.game_id.toString());
             userPicks[p.game_id] = p.picked_team;
             userWagers[p.game_id] = p.wager;
             if (p.is_double_up) doubleUpPick = p.game_id.toString();
+
             const card = document.querySelector(`.game-card[data-game-id="${p.game_id}"]`);
             if (card) {
                 card.querySelector(`.team[data-team-name="${p.picked_team}"]`)?.classList.add('selected');
                 card.querySelector(`.wager-btn[data-value="${p.wager}"]`)?.classList.add('selected');
                 if (p.is_double_up) card.querySelector('.double-up-btn').classList.add('selected');
-                card.insertAdjacentHTML('beforeend', '<div class="saved-indicator" title="This pick is saved"></div>');
             }
         });
     } catch (err) {
@@ -235,12 +265,28 @@ async function loadAndApplyUserPicks(week) {
 
 async function displayDashboard() {
     if (!currentUser) return;
-    const [pendingPicksRes, pastPicksRes] = await Promise.all([
-        supabase.from('picks').select('*').eq('user_id', currentUser.id).is('is_correct', null),
-        supabase.from('picks').select('*').eq('user_id', currentUser.id).not('is_correct', 'is', null).order('created_at', { ascending: false })
-    ]);
+
     const pendingBody = document.getElementById('pending-picks-body');
+    const historyBody = document.getElementById('pick-history-body');
+
+    // Clear previous state
+    pendingBody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
+    historyBody.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
     document.getElementById('pending-picks-week').textContent = defaultWeek;
+
+    if (!currentSelectedMatchId) {
+        pendingBody.innerHTML = `<tr><td colspan="3">Please join a match to see your picks.</td></tr>`;
+        historyBody.innerHTML = `<tr><td colspan="4">No pick history to show.</td></tr>`;
+        return;
+    }
+
+    // Fetch picks FILTERED BY THE GLOBAL MATCH ID
+    const [pendingPicksRes, pastPicksRes] = await Promise.all([
+        supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('match_id', currentSelectedMatchId).is('is_correct', null),
+        supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('match_id', currentSelectedMatchId).not('is_correct', 'is', null).order('created_at', { ascending: false })
+    ]);
+    
+    // Render Pending Picks
     pendingBody.innerHTML = '';
     const pendingPicksForWeek = pendingPicksRes.data?.filter(p => p.week === defaultWeek) || [];
     if (pendingPicksForWeek.length > 0) {
@@ -253,7 +299,8 @@ async function displayDashboard() {
     } else {
         pendingBody.innerHTML = `<tr><td colspan="3">No pending picks for ${defaultWeek}.</td></tr>`;
     }
-    const historyBody = document.getElementById('pick-history-body');
+
+    // Render Pick History
     historyBody.innerHTML = '';
     if (pastPicksRes.data?.length > 0) {
         pastPicksRes.data.forEach(pick => {
@@ -272,36 +319,19 @@ async function displayDashboard() {
 }
 
 async function displayScoreboardPage() {
-    const selector = document.getElementById('match-selector');
     const runSheetContainer = document.getElementById('run-sheet-container');
     
-    // Clear previous state
     if (scoreChartInstance) {
         scoreChartInstance.destroy();
         scoreChartInstance = null;
     }
     runSheetContainer.innerHTML = '';
 
-    const { data: userMatches, error: userMatchesError } = await supabase
-        .from('match_members')
-        .select('matches (id, name)')
-        .eq('user_id', currentUser.id);
-
-    if (userMatchesError || !userMatches || userMatches.length === 0) {
-        runSheetContainer.innerHTML = '<p>You are not part of any matches yet. Visit the Matches page to join or create one!</p>';
-        selector.innerHTML = '';
-        return;
+    if (currentSelectedMatchId) {
+        loadScoreboardForMatch(currentSelectedMatchId);
+    } else {
+        runSheetContainer.innerHTML = '<p>Please join a match to see the scoreboard.</p>';
     }
-
-    selector.innerHTML = userMatches.map(m => `<option value="${m.matches.id}">${m.matches.name}</option>`).join('');
-    
-    // Replace listener to prevent duplicates
-    const newSelector = selector.cloneNode(true);
-    selector.parentNode.replaceChild(newSelector, selector);
-    newSelector.addEventListener('change', () => loadScoreboardForMatch(newSelector.value));
-
-    // Initial load
-    loadScoreboardForMatch(newSelector.value);
 }
 
 async function loadScoreboardForMatch(matchId) {
@@ -314,27 +344,26 @@ async function loadScoreboardForMatch(matchId) {
     if (membersError) return console.error("Error fetching members:", membersError);
     if (!members || members.length === 0) return;
 
-    // 2. Fetch all historical, scored picks for these members
-    const memberIds = members.map(m => m.profiles.id);
+    // 2. Fetch all historical, scored picks FOR THIS SPECIFIC MATCH
     const { data: allScoredPicks, error: picksError } = await supabase
         .from('picks')
         .select('user_id, week, wager, is_double_up, is_correct')
-        .in('user_id', memberIds)
-        .not('is_correct', 'is', null); // Only get picks that have a result
+        .eq('match_id', matchId) // Filter by the match ID
+        .not('is_correct', 'is', null);
 
     if (picksError) return console.error("Error fetching historical picks:", picksError);
 
-    // 3. Process the raw picks into a week-by-week cumulative score for the chart
+    // 3. Process the raw picks (this function does not need to change)
     const chartData = processWeeklyScores(members, allScoredPicks || []);
-    renderScoreChart(chartData); // Render the new time-series chart
+    renderScoreChart(chartData);
 
-    // 4. Fetch the CURRENT week's picks for the run sheet (this logic remains the same)
+    // 4. Fetch the CURRENT week's picks for the run sheet FOR THIS SPECIFIC MATCH
     const selectedWeek = defaultWeek;
     document.getElementById('scoreboard-week-title').textContent = selectedWeek;
     const { data: allCurrentPicks } = await supabase
         .from('picks')
         .select('picked_team, wager, is_double_up, game_id, user_id')
-        .in('user_id', memberIds)
+        .eq('match_id', matchId) // Filter by the match ID
         .eq('week', selectedWeek);
     
     renderRunSheet(members, allCurrentPicks || [], selectedWeek);
@@ -494,7 +523,7 @@ function renderRunSheet(members, allPicks, week) {
 
     let tableHtml = '<table class="run-sheet-table">';
 
-    // Header Row: Game, Odds, followed by player names
+    // Header Row: Game, Status, Odds, followed by player names
     tableHtml += '<thead><tr><th>Game</th><th>Odds</th>';
     sortedMembers.forEach(member => {
         tableHtml += `<th>${member.profiles.username}</th>`;
@@ -506,17 +535,20 @@ function renderRunSheet(members, allPicks, week) {
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
         const hasKickedOff = kickoff < now;
-        
-        // --- THIS IS THE ONLY LINE THAT CHANGES ---
-        // Before: const isFinal = game.Status === 'post';
-        const shouldShowScore = game.Status !== 'pre'; // Now shows score if game is in-progress OR final
+        const isFinal = game.Status === 'post';
 
-        // Logic for Scores and Odds
-        const awayScore = shouldShowScore ? game['Away Score'] : '-';
-        const homeScore = shouldShowScore ? game['Home Score'] : '-';
+        // --- Logic for Scores, Status, and Odds ---
+        const awayScore = isFinal ? game['Away Score'] : '-';
+        const homeScore = isFinal ? game['Home Score'] : '-';
         const oddsText = game.Odds || '-';
 
-        // Build the row structure
+        // Status Logic: Only show 'game over' if kickoff has passed.
+        let statusText = game.Situation || '';
+        if (statusText.toLowerCase().includes('over') && kickoff > now) {
+            statusText = ''; // Leave blank if data says "game over" but it hasn't started
+        }
+        
+        // --- Build the new, more complex row ---
         tableHtml += `<tr>
             <td class="game-matchup-cell">
                 <div class="matchup-team-container">
@@ -534,10 +566,10 @@ function renderRunSheet(members, allPicks, week) {
                     </div>
                 </div>
             </td>
-            <td class="odds-cell">${oddsText}</td> 
+            <td class="odds-cell">${oddsText}</td>
         `;
         
-        // Player picks logic remains the same
+        // This part for player picks remains the same
         sortedMembers.forEach(member => {
             const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
 
@@ -644,36 +676,114 @@ function addGameCardEventListeners() {
 
 async function savePicks() {
     if (!currentUser) return alert('You must be logged in!');
+    
+    const selectedWeek = document.getElementById('week-selector').value;
+    
+    // --- THE FIX IS HERE ---
+    // BEFORE (causes the error): 
+    // const selectedMatchId = document.getElementById('match-selector-picks').value;
+    
+    // AFTER (correct way): Use the global state variable we already set.
+    if (!currentSelectedMatchId) {
+        return alert("Error: No match has been selected. This might happen if you are not in any matches.");
+    }
+
     try {
-        const selectedWeek = document.getElementById('week-selector').value;
+        // This validation logic is still correct
         for (const gameId in userPicks) {
             if (userPicks[gameId] && !userWagers[gameId]) {
                 const game = allGames.find(g => g['Game Id'] === gameId);
                 throw new Error(`You must place a wager for the ${game['Away Display Name']} @ ${game['Home Display Name']} game.`);
             }
         }
+
+        // Now, we use the global `currentSelectedMatchId` variable when building the picks
         const picksToUpsert = Object.keys(userPicks).filter(gameId => userPicks[gameId] !== undefined).map(gameId => ({
             user_id: currentUser.id,
             game_id: parseInt(gameId, 10),
+            match_id: currentSelectedMatchId, // Use the global variable
             picked_team: userPicks[gameId],
             wager: userWagers[gameId],
             is_double_up: gameId === doubleUpPick,
             week: selectedWeek
         }));
+
         const picksToDelete = [...initiallySavedPicks].filter(gameId => !userPicks[gameId]);
+
         if (picksToUpsert.length > 0) {
-            const { error } = await supabase.from('picks').upsert(picksToUpsert, { onConflict: 'user_id, game_id' });
+            const { error } = await supabase.from('picks').upsert(picksToUpsert, { onConflict: 'user_id, game_id, match_id' });
             if (error) throw error;
         }
+
         if (picksToDelete.length > 0) {
-            const { error } = await supabase.from('picks').delete().eq('user_id', currentUser.id).in('game_id', picksToDelete);
+            const { error } = await supabase.from('picks')
+                .delete()
+                .eq('user_id', currentUser.id)
+                .eq('match_id', currentSelectedMatchId) // Use the global variable
+                .in('game_id', picksToDelete);
             if (error) throw error;
         }
-        alert('Your picks have been saved!');
-        renderGamesForWeek(selectedWeek);
+
+        alert('Your picks have been saved for this match!');
+        renderGamesForWeek(selectedWeek, currentSelectedMatchId); // Use the global variable
     } catch (error) {
         console.error("Save Picks Error:", error);
         alert('Error: ' + error.message);
+    }
+}
+
+async function setupGlobalMatchSelector() {
+    const selectorContainer = document.getElementById('global-selector-container');
+    const selector = document.getElementById('global-match-selector');
+    
+    selectorContainer.classList.add('hidden');
+    currentSelectedMatchId = null;
+
+    if (!currentUser) {
+        return;
+    }
+
+    // --- THIS IS THE CORRECTED QUERY LOGIC ---
+
+    // 1. First, get the IDs of the matches the user is in. This is a simple, direct query.
+    const { data: memberships, error: membershipError } = await supabase
+        .from('match_members')
+        .select('match_id')
+        .eq('user_id', currentUser.id);
+
+    if (membershipError || !memberships || memberships.length === 0) {
+        currentSelectedMatchId = null;
+        return; // Exit if user is in no matches
+    }
+
+    // 2. Now, get the details for ONLY those specific matches.
+    const matchIds = memberships.map(m => m.match_id);
+    const { data: userMatches, error: matchesError } = await supabase
+        .from('matches')
+        .select('id, name')
+        .in('id', matchIds);
+
+    // --- END OF CORRECTED QUERY LOGIC ---
+
+    // The rest of the function logic remains the same
+    if (matchesError || !userMatches || userMatches.length === 0) {
+        currentSelectedMatchId = null;
+    } 
+    else if (userMatches.length === 1) {
+        currentSelectedMatchId = userMatches[0].id;
+    } 
+    else {
+        selector.innerHTML = userMatches.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+        currentSelectedMatchId = selector.value;
+        selectorContainer.classList.remove('hidden');
+
+        selector.addEventListener('change', () => {
+            currentSelectedMatchId = selector.value;
+            const activePageId = document.querySelector('.page.active')?.id;
+            if (activePageId) {
+                showPage(activePageId);
+            }
+        });
     }
 }
 
@@ -716,10 +826,6 @@ async function createMatch() {
     }
 }
 
-async function fetchUserPicksForWeek(week) {
-    if (!currentUser) return { data: [], error: null };
-    return await supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('week', week);
-}
 
 // =================================================================
 // INITIALIZATION & APP START
@@ -776,9 +882,13 @@ async function init() {
         return;
     }
     
-    supabase.auth.onAuthStateChange((event, session) => {
+    supabase.auth.onAuthStateChange(async (event, session) => { // Make it async
         currentUser = session?.user || null;
         updateUserStatusUI();
+        
+        // This sets up the selector and determines the initial match ID
+        await setupGlobalMatchSelector(); 
+        
         const hash = window.location.hash.substring(1);
         const pageId = (hash || 'home') + '-page';
         if (currentUser) {
