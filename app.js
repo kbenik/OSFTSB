@@ -494,7 +494,7 @@ function renderRunSheet(members, allPicks, week) {
 
     let tableHtml = '<table class="run-sheet-table">';
 
-    // Header Row: Game, Status, Odds, followed by player names
+    // Header Row: Game, Odds, followed by player names
     tableHtml += '<thead><tr><th>Game</th><th>Odds</th>';
     sortedMembers.forEach(member => {
         tableHtml += `<th>${member.profiles.username}</th>`;
@@ -506,20 +506,17 @@ function renderRunSheet(members, allPicks, week) {
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
         const hasKickedOff = kickoff < now;
-        const isFinal = game.Status === 'post';
+        
+        // --- THIS IS THE ONLY LINE THAT CHANGES ---
+        // Before: const isFinal = game.Status === 'post';
+        const shouldShowScore = game.Status !== 'pre'; // Now shows score if game is in-progress OR final
 
-        // --- Logic for Scores, Status, and Odds ---
-        const awayScore = isFinal ? game['Away Score'] : '-';
-        const homeScore = isFinal ? game['Home Score'] : '-';
+        // Logic for Scores and Odds
+        const awayScore = shouldShowScore ? game['Away Score'] : '-';
+        const homeScore = shouldShowScore ? game['Home Score'] : '-';
         const oddsText = game.Odds || '-';
 
-        // Status Logic: Only show 'game over' if kickoff has passed.
-        let statusText = game.Situation || '';
-        if (statusText.toLowerCase().includes('over') && kickoff > now) {
-            statusText = ''; // Leave blank if data says "game over" but it hasn't started
-        }
-        
-        // --- Build the new, more complex row ---
+        // Build the row structure
         tableHtml += `<tr>
             <td class="game-matchup-cell">
                 <div class="matchup-team-container">
@@ -537,10 +534,10 @@ function renderRunSheet(members, allPicks, week) {
                     </div>
                 </div>
             </td>
-            <td class="odds-cell">${oddsText}</td>
+            <td class="odds-cell">${oddsText}</td> 
         `;
         
-        // This part for player picks remains the same
+        // Player picks logic remains the same
         sortedMembers.forEach(member => {
             const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
 
