@@ -14,6 +14,7 @@ let userPicks = {};
 let userWagers = {};
 let doubleUpPick = null;
 let initiallySavedPicks = new Set();
+let scoreChartInstance = null;
 
 // =================================================================
 // EVENT LISTENERS
@@ -198,6 +199,9 @@ async function renderGamesForWeek(week) {
                 </div>
                 <button class="double-up-btn">2x Double Up</button>
             </div>`;
+
+        // --- FIX: This line was missing ---
+        gamesContainer.appendChild(gameCard); 
     });
     addGameCardEventListeners();
     await loadAndApplyUserPicks(week);
@@ -269,55 +273,331 @@ async function displayDashboard() {
 
 async function displayScoreboardPage() {
     const selector = document.getElementById('match-selector');
-    const standingsBody = document.getElementById('scoreboard-standings-body');
-    const picksContainer = document.getElementById('scoreboard-picks-container');
-    const { data: userMatches, error: userMatchesError } = await supabase.from('match_members').select('matches (id, name)').eq('user_id', currentUser.id);
+    const runSheetContainer = document.getElementById('run-sheet-container');
+    
+    // Clear previous state
+    if (scoreChartInstance) {
+        scoreChartInstance.destroy();
+        scoreChartInstance = null;
+    }
+    runSheetContainer.innerHTML = '';
+
+    const { data: userMatches, error: userMatchesError } = await supabase
+        .from('match_members')
+        .select('matches (id, name)')
+        .eq('user_id', currentUser.id);
+
     if (userMatchesError || !userMatches || userMatches.length === 0) {
-        standingsBody.innerHTML = '<tr><td colspan="3">You are not part of any matches yet. Visit the Matches page to join or create one!</td></tr>';
-        picksContainer.innerHTML = '';
+        runSheetContainer.innerHTML = '<p>You are not part of any matches yet. Visit the Matches page to join or create one!</p>';
         selector.innerHTML = '';
         return;
     }
+
     selector.innerHTML = userMatches.map(m => `<option value="${m.matches.id}">${m.matches.name}</option>`).join('');
+    
+    // Replace listener to prevent duplicates
     const newSelector = selector.cloneNode(true);
     selector.parentNode.replaceChild(newSelector, selector);
     newSelector.addEventListener('change', () => loadScoreboardForMatch(newSelector.value));
+
+    // Initial load
     loadScoreboardForMatch(newSelector.value);
 }
 
 async function loadScoreboardForMatch(matchId) {
-    document.getElementById('scoreboard-week-title').textContent = defaultWeek;
-    const { data: members, error: membersError } = await supabase.from('match_members').select('score, profiles (id, username)').eq('match_id', matchId).order('score', { ascending: false });
-    if (membersError) return console.error("Error fetching members");
-    const standingsBody = document.getElementById('scoreboard-standings-body');
-    standingsBody.innerHTML = '';
-    members.forEach((member, index) => {
-        standingsBody.innerHTML += `<tr><td>${index + 1}</td><td>${member.profiles.username}</td><td>${member.score}</td></tr>`;
-    });
+    // 1. Fetch all members in the current match
+    const { data: members, error: membersError } = await supabase
+        .from('match_members')
+        .select('profiles (id, username)')
+        .eq('match_id', matchId);
+
+    if (membersError) return console.error("Error fetching members:", membersError);
+    if (!members || members.length === 0) return;
+
+    // 2. Fetch all historical, scored picks for these members
     const memberIds = members.map(m => m.profiles.id);
-    const { data: allPicks } = await supabase.from('picks').select('picked_team, wager, is_double_up, game_id, profiles (username)').in('user_id', memberIds).eq('week', defaultWeek);
-    const picksContainer = document.getElementById('scoreboard-picks-container');
-    picksContainer.innerHTML = '';
-    const picksByUser = members.map(m => ({
-        username: m.profiles.username,
-        picks: allPicks?.filter(p => p.profiles.username === m.profiles.username) || []
-    }));
-    picksByUser.forEach(user => {
-        let picksHtml = user.picks.map(pick => {
-            const doubleUp = pick.is_double_up ? ' 🔥' : '';
-            return `<li><span>${pick.picked_team}</span> <span class="wager-indicator">${pick.wager}${doubleUp}</span></li>`;
-        }).join('');
-        picksContainer.innerHTML += `<div class="scoreboard-user-picks"><h3>${user.username}</h3><ul>${picksHtml || '<li>No picks made yet.</li>'}</ul></div>`;
+    const { data: allScoredPicks, error: picksError } = await supabase
+        .from('picks')
+        .select('user_id, week, wager, is_double_up, is_correct')
+        .in('user_id', memberIds)
+        .not('is_correct', 'is', null); // Only get picks that have a result
+
+    if (picksError) return console.error("Error fetching historical picks:", picksError);
+
+    // 3. Process the raw picks into a week-by-week cumulative score for the chart
+    const chartData = processWeeklyScores(members, allScoredPicks || []);
+    renderScoreChart(chartData); // Render the new time-series chart
+
+    // 4. Fetch the CURRENT week's picks for the run sheet (this logic remains the same)
+    const selectedWeek = defaultWeek;
+    document.getElementById('scoreboard-week-title').textContent = selectedWeek;
+    const { data: allCurrentPicks } = await supabase
+        .from('picks')
+        .select('picked_team, wager, is_double_up, game_id, user_id')
+        .in('user_id', memberIds)
+        .eq('week', selectedWeek);
+    
+    renderRunSheet(members, allCurrentPicks || [], selectedWeek);
+}
+
+// *** ADD THIS NEW HELPER FUNCTION ***
+function processWeeklyScores(members, allPicks) {
+    const labels = ['Start'];
+    const maxWeek = 18;
+    for (let i = 1; i <= maxWeek; i++) {
+        labels.push(`Week ${i}`);
+    }
+
+    const playerScoresByWeek = new Map();
+    let latestCompletedWeek = 0; // Track the most recent week with scored games
+
+    // Initialize scores for all players
+    members.forEach(member => {
+        playerScoresByWeek.set(member.profiles.id, Array(maxWeek + 1).fill(0));
+    });
+
+    // Calculate points for each week
+    allPicks.forEach(pick => {
+        const weekNum = parseInt(pick.week.split(' ')[1]);
+        if (weekNum > 0 && weekNum <= maxWeek) {
+            // Update the latest completed week if this pick's week is higher
+            if (weekNum > latestCompletedWeek) {
+                latestCompletedWeek = weekNum;
+            }
+            let points = pick.is_correct ? pick.wager : (pick.wager * -2);
+            if (pick.is_double_up) {
+                points *= 2;
+            }
+            const userScores = playerScoresByWeek.get(pick.user_id);
+            if (userScores) {
+                userScores[weekNum] += points; // Add points for that specific week
+            }
+        }
+    });
+
+    // Calculate cumulative scores
+    playerScoresByWeek.forEach((scores, userId) => {
+        for (let i = 1; i <= maxWeek; i++) {
+            scores[i] = scores[i] + scores[i - 1]; // Cumulative sum
+        }
+        
+        // --- NEW: Set future weeks to null to create a gap in the line ---
+        for (let i = latestCompletedWeek + 1; i <= maxWeek; i++) {
+            scores[i] = null;
+        }
+    });
+    
+    // WoW-inspired distinct colors
+    const playerColors = [
+        'rgba(196, 30, 58, 1)',  // Warrior Red
+        'rgba(0, 112, 221, 1)',  // Mage Blue
+        'rgba(255, 124, 10, 1)', // Druid Orange
+        'rgba(163, 221, 105, 1)',// Rogue Green
+        'rgba(244, 140, 186, 1)',// Paladin Pink
+        'rgba(105, 204, 240, 1)',// Shaman Light Blue
+        'rgba(148, 130, 201, 1)',// Warlock Purple
+        'rgba(255, 155, 0, 1)'  // Monk Gold
+    ];
+
+    // Create the final dataset for Chart.js
+    const datasets = [];
+    let colorIndex = 0;
+    members.forEach(member => {
+        const color = playerColors[colorIndex % playerColors.length];
+        datasets.push({
+            label: member.profiles.username,
+            data: playerScoresByWeek.get(member.profiles.id),
+            borderColor: color,
+            backgroundColor: color.replace('1)', '0.1)'),
+            fill: false,
+            tension: 0.1,
+            pointRadius: 3,
+            spanGaps: false // This tells Chart.js to NOT draw a line over null data points
+        });
+        colorIndex++;
+    });
+
+    return { labels, datasets };
+}
+// *** ADD THIS NEW FUNCTION ***
+function renderScoreChart(chartData) {
+    const ctx = document.getElementById('score-chart').getContext('2d');
+    
+    // --- NEW: Dynamic Scaling Logic ---
+    let minScore = 0;
+    let maxScore = 0;
+    chartData.datasets.forEach(dataset => {
+        dataset.data.forEach(point => {
+            if (point === null) return;
+            if (point < minScore) minScore = point;
+            if (point > maxScore) maxScore = point;
+        });
+    });
+
+    // Set a default scale of -10 to 10, but allow it to expand if scores go beyond that
+    const suggestedMin = Math.min(-10, minScore - 5); // Add 5 points of padding
+    const suggestedMax = Math.max(10, maxScore + 5); // Add 5 points of padding
+
+    if (scoreChartInstance) {
+        scoreChartInstance.destroy();
+    }
+
+    scoreChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: chartData,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'top',
+                    labels: { boxWidth: 12, font: { size: 12 } }
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false,
+                    callbacks: {
+                        title: (tooltipItems) => tooltipItems[0].label,
+                        label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(0)}`
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    // Apply the dynamic min/max values
+                    min: suggestedMin,
+                    max: suggestedMax,
+                    ticks: { color: '#666' },
+                    grid: { color: '#eee' }
+                },
+                x: {
+                    ticks: { color: '#666' },
+                    grid: { display: false }
+                }
+            },
+            interaction: {
+                mode: 'index',
+                intersect: false
+            }
+        }
     });
 }
+
+// *** ADD THIS NEW FUNCTION ***
+function renderRunSheet(members, allPicks, week) {
+    const container = document.getElementById('run-sheet-container');
+    const weeklyGames = allGames.filter(g => g.Week === week).sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
+    const now = new Date();
+
+    // Sort members by username for consistent column order
+    const sortedMembers = [...members].sort((a, b) => a.profiles.username.localeCompare(b.profiles.username));
+
+    let tableHtml = '<table class="run-sheet-table">';
+
+    // Header Row: Game, Status, Odds, followed by player names
+    tableHtml += '<thead><tr><th>Game</th><th>Odds</th>';
+    sortedMembers.forEach(member => {
+        tableHtml += `<th>${member.profiles.username}</th>`;
+    });
+    tableHtml += '</tr></thead>';
+
+    // Body Rows: One for each game
+    tableHtml += '<tbody>';
+    weeklyGames.forEach(game => {
+        const kickoff = getKickoffTimeAsDate(game);
+        const hasKickedOff = kickoff < now;
+        const isFinal = game.Status === 'post';
+
+        // --- Logic for Scores, Status, and Odds ---
+        const awayScore = isFinal ? game['Away Score'] : '-';
+        const homeScore = isFinal ? game['Home Score'] : '-';
+        const oddsText = game.Odds || '-';
+
+        // Status Logic: Only show 'game over' if kickoff has passed.
+        let statusText = game.Situation || '';
+        if (statusText.toLowerCase().includes('over') && kickoff > now) {
+            statusText = ''; // Leave blank if data says "game over" but it hasn't started
+        }
+        
+        // --- Build the new, more complex row ---
+        tableHtml += `<tr>
+            <td class="game-matchup-cell">
+                <div class="matchup-team-container">
+                    <img src="${game['Away Logo']}" alt="${game['Away']}" class="team-logo">
+                    <div class="team-info-wrapper">
+                         <span class="team-code">${game['Away']}</span>
+                         <span class="team-score">${awayScore}</span>
+                    </div>
+                </div>
+                <div class="matchup-team-container">
+                    <img src="${game['Home Logo']}" alt="${game['Home']}" class="team-logo">
+                     <div class="team-info-wrapper">
+                         <span class="team-code">${game['Home']}</span>
+                         <span class="team-score">${homeScore}</span>
+                    </div>
+                </div>
+            </td>
+            <td class="odds-cell">${oddsText}</td>
+        `;
+        
+        // This part for player picks remains the same
+        sortedMembers.forEach(member => {
+            const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
+
+            if (pick && hasKickedOff) {
+                const pickedTeamCode = pick.picked_team === game['Home Display Name'] ? game['Home'] : game['Away'];
+                const doubleUpClass = pick.is_double_up ? 'double-up' : '';
+                
+                tableHtml += `<td class="pick-cell wager-${pick.wager} ${doubleUpClass}">${pickedTeamCode}</td>`;
+
+            } else {
+                tableHtml += `<td class="locked-pick"><i>🔒</i></td>`;
+            }
+        });
+
+        tableHtml += '</tr>';
+    });
+    tableHtml += '</tbody></table>';
+
+    container.innerHTML = tableHtml;
+}
+
 
 async function displayMatchesPage() {
     const container = document.getElementById('matches-list-container');
     container.innerHTML = '<p>Loading public matches...</p>';
-    const { data: matches, error } = await supabase.from('matches').select('id, name').eq('is_public', true);
-    if (error) return container.innerHTML = '<p>Could not load matches. Please try again.</p>';
-    if (matches.length === 0) return container.innerHTML = '<p>No public matches found. Why not create one?</p>';
-    container.innerHTML = matches.map(match => `<div class="match-item"><span>${match.name}</span><button class="button-primary join-match-btn" data-match-id="${match.id}">Join</button></div>`).join('');
+
+    // Fetch both all public matches and the user's current memberships at the same time
+    const [publicMatchesRes, userMembershipsRes] = await Promise.all([
+        supabase.from('matches').select('id, name').eq('is_public', true),
+        supabase.from('match_members').select('match_id').eq('user_id', currentUser.id)
+    ]);
+
+    const { data: publicMatches, error: matchesError } = publicMatchesRes;
+    const { data: userMemberships, error: membershipsError } = userMembershipsRes;
+
+    if (matchesError || membershipsError) {
+        return container.innerHTML = '<p>Could not load matches. Please try again.</p>';
+    }
+
+    if (!publicMatches || publicMatches.length === 0) {
+        return container.innerHTML = '<p>No public matches found. Why not create one?</p>';
+    }
+
+    // Create a Set of the user's joined match IDs for a fast and easy lookup
+    const joinedMatchIds = new Set(userMemberships.map(m => m.match_id));
+
+    // Map over the public matches and generate the correct HTML for each one
+    container.innerHTML = publicMatches.map(match => {
+        const isJoined = joinedMatchIds.has(match.id);
+
+        // Conditionally create either a "Join" button or a disabled "Currently Joined" button
+        const buttonHtml = isJoined
+            ? `<button class="button-secondary" disabled>Currently Joined</button>`
+            : `<button class="button-primary join-match-btn" data-match-id="${match.id}">Join</button>`;
+        
+        return `<div class="match-item"><span>${match.name}</span>${buttonHtml}</div>`;
+    }).join('');
 }
 
 // =================================================================
