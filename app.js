@@ -467,14 +467,17 @@ async function init() {
 
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
-            e.preventDefault();
-            if (mainNav.classList.contains('nav-open')) {
-                mainNav.classList.remove('nav-open');
-                 document.body.classList.remove('nav-open-body');
-            }
-            window.location.hash = navLink.getAttribute('href').substring(1);
+        e.preventDefault();
+        if (mainNav.classList.contains('nav-open')) {
+            mainNav.classList.remove('nav-open');
+            document.body.classList.remove('nav-open-body');
         }
-    });
+        window.location.hash = navLink.getAttribute('href').substring(1);
+    } else if (mainNav.classList.contains('nav-open') && !e.target.closest('#main-nav') && !e.target.closest('#hamburger-btn')) {
+        mainNav.classList.remove('nav-open');
+        document.body.classList.remove('nav-open-body');
+    }
+});
 
     window.addEventListener('hashchange', () => {
         const pageId = (window.location.hash.substring(1) || 'home') + '-page';
