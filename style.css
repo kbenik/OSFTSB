@@ -233,6 +233,15 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     .run-sheet-table .game-matchup-cell {
         width: 120px;
     }
+    #global-selector-container {
+        order: 4; /* Place it in the flow on mobile */
+        width: 100%;
+        margin-top: 10px;
+        margin-right: 0;
+    }
+    #global-match-selector {
+        width: 100%;
+    }
 }
 /* Updated Run Sheet Cell for Matchups */
 .run-sheet-table .game-matchup-cell {
@@ -299,4 +308,42 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     border-radius: 5px;
     font-size: 1rem;
     cursor: not-allowed; /* Show a "not allowed" cursor on hover */
+}
+.page-controls-wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap; /* Allows wrapping on small screens */
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.selectors-container {
+    display: flex;
+    gap: 10px;
+}
+
+#global-selector-container {
+    margin-right: 15px;
+}
+
+#global-match-selector {
+    padding: 6px 10px;
+    border-radius: 5px;
+    border: 1px solid #fff;
+    background-color: var(--primary-color);
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+#global-match-selector:focus {
+    outline: 2px solid var(--accent-color);
+}
+#week-selector {
+    padding: 8px 12px;
+    border-radius: var(--border-radius);
+    border: 1px solid #ccc;
+    background-color: white;
+    font-size: 1rem;
 }
