@@ -129,12 +129,14 @@ function setupAuthListeners() {
             password,
             options: { data: { username } }
         });
-        if (error) return alert('Error signing up: ' + error.message);
-        const { error: profileError } = await supabase.from('profiles').insert([{ id: data.user.id, username: username }]);
-        if (profileError) return alert('Error creating profile: ' + profileError.message);
-        alert('Sign up successful! Please check your email to confirm your account.');
-        e.target.reset();
-    });
+    if (error) {
+        // Provide a more specific error for the user
+        return alert('Error signing up: ' + error.message);
+    }
+    // The profile is now created automatically by the database trigger.
+    alert('Sign up successful!');
+    e.target.reset();
+});
 
     document.getElementById('login-form').addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -804,25 +806,63 @@ async function joinMatch(matchId) {
 
 async function createMatch() {
     const name = prompt("Enter a name for your new match:");
-    if (!name) return;
+    if (!name || name.trim().length < 3) {
+        return alert("Match name must be at least 3 characters long.");
+    }
+
     const password = prompt("Create a password for your match (users will need this to join):");
-    if (!password) return;
-    const { data: newMatch, error: createError } = await supabase.from('matches').insert({
-        name,
-        password,
-        created_by: currentUser.id,
-        is_public: true
-    }).select().single();
-    if (createError) return alert("Error creating match: " + createError.message);
-    const { error: memberError } = await supabase.from('match_members').insert({
-        match_id: newMatch.id,
-        user_id: currentUser.id
-    });
-    if (!memberError) {
-        alert("Match created successfully!");
-        displayMatchesPage();
-    } else {
-        alert("Match created, but failed to add you as a member: " + memberError.message);
+    if (!password || password.length < 6) {
+        return alert("Password must be at least 6 characters long.");
+    }
+
+    try {
+        // We now call a single database function to handle all the logic securely.
+        const { error } = await supabase.from('matches').insert({
+            name: name,
+            hashed_password: password, // The database will handle hashing this.
+            created_by: currentUser.id,
+            is_public: true
+        });
+
+        if (error) {
+            throw error;
+        }
+
+        // Now, we need to get the new match to add the creator as a member
+        const { data: newMatch, error: fetchError } = await supabase
+            .from('matches')
+            .select('id')
+            .eq('name', name)
+            .eq('created_by', currentUser.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single();
+
+        if (fetchError || !newMatch) {
+           throw new Error("Could not find the match right after creating it.");
+        }
+
+        // Automatically add the creator as a member of their own match.
+        const { error: memberError } = await supabase.from('match_members').insert({
+            match_id: newMatch.id,
+            user_id: currentUser.id
+        });
+
+        if (memberError) {
+            throw memberError;
+        }
+
+        alert("Match created successfully! You have been added as a member.");
+        // Refresh the matches page to show the new match
+        if (document.getElementById('matches-page').classList.contains('active')) {
+             displayMatchesPage();
+        } else {
+             window.location.hash = '#matches';
+        }
+
+    } catch (error) {
+        console.error("Error creating match:", error);
+        alert("Error creating match: " + error.message);
     }
 }
 
