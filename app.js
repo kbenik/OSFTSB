@@ -514,43 +514,31 @@ function renderScoreChart(chartData) {
     });
 }
 
-// *** ADD THIS NEW FUNCTION ***
 function renderRunSheet(members, allPicks, week) {
     const container = document.getElementById('run-sheet-container');
     const weeklyGames = allGames.filter(g => g.Week === week).sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
     const now = new Date();
 
-    // Sort members by username for consistent column order
     const sortedMembers = [...members].sort((a, b) => a.profiles.username.localeCompare(b.profiles.username));
-
     let tableHtml = '<table class="run-sheet-table">';
 
-    // Header Row: Game, Status, Odds, followed by player names
     tableHtml += '<thead><tr><th>Game</th><th>Odds</th>';
     sortedMembers.forEach(member => {
         tableHtml += `<th>${member.profiles.username}</th>`;
     });
     tableHtml += '</tr></thead>';
 
-    // Body Rows: One for each game
     tableHtml += '<tbody>';
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
+        // FOR TESTING: Uncomment the next line to see all picks
+        // const hasKickedOff = true;
         const hasKickedOff = kickoff < now;
         const isFinal = game.Status === 'post';
-
-        // --- Logic for Scores, Status, and Odds ---
         const awayScore = isFinal ? game['Away Score'] : '-';
         const homeScore = isFinal ? game['Home Score'] : '-';
         const oddsText = game.Odds || '-';
 
-        // Status Logic: Only show 'game over' if kickoff has passed.
-        let statusText = game.Situation || '';
-        if (statusText.toLowerCase().includes('over') && kickoff > now) {
-            statusText = ''; // Leave blank if data says "game over" but it hasn't started
-        }
-        
-        // --- Build the new, more complex row ---
         tableHtml += `<tr>
             <td class="game-matchup-cell">
                 <div class="matchup-team-container">
@@ -568,18 +556,30 @@ function renderRunSheet(members, allPicks, week) {
                     </div>
                 </div>
             </td>
-            <td class="odds-cell">${oddsText}</td>
-        `;
+            <td class="odds-cell">${oddsText}</td>`;
         
-        // This part for player picks remains the same
+        // --- THIS IS THE UPDATED LOGIC FOR PLAYER PICKS ---
         sortedMembers.forEach(member => {
             const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
 
             if (pick && hasKickedOff) {
-                const pickedTeamCode = pick.picked_team === game['Home Display Name'] ? game['Home'] : game['Away'];
-                const doubleUpClass = pick.is_double_up ? 'double-up' : '';
+                // 1. Get the logo URL for the picked team
+                const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] 
+                    ? game['Home Logo'] 
+                    : game['Away Logo'];
+
+                // 2. Determine if the fire emoji should be shown
+                const doubleUpEmoji = pick.is_double_up ? ' 🔥' : '';
+
+                // 3. Construct the HTML content for the cell with the logo and wager text
+                const cellContent = `
+                    <div class="pick-content-wrapper">
+                        <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="pick-logo" title="${pick.picked_team}">
+                        <span>- ${pick.wager}${doubleUpEmoji}</span>
+                    </div>
+                `;
                 
-                tableHtml += `<td class="pick-cell wager-${pick.wager} ${doubleUpClass}">${pickedTeamCode}</td>`;
+                tableHtml += `<td class="pick-cell wager-${pick.wager}">${cellContent}</td>`;
 
             } else {
                 tableHtml += `<td class="locked-pick"><i>🔒</i></td>`;
@@ -592,6 +592,7 @@ function renderRunSheet(members, allPicks, week) {
 
     container.innerHTML = tableHtml;
 }
+
 
 
 async function displayMatchesPage() {
