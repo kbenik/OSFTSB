@@ -266,12 +266,11 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     vertical-align: middle;
 }
 
-.run-sheet-table .status-cell,
-.run-sheet-table .odds-cell {
+.run-sheet-table .status-cell {
     font-size: 0.8rem;
     color: #555;
     background-color: #f9f9f9;
-    width: 80px; /* Give them a fixed width */
+    width: 80px;
     vertical-align: middle;
 }
 
@@ -355,4 +354,9 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     padding-top: 10px;
     padding-bottom: 10px;
     vertical-align: middle; /* Ensures content aligns nicely in all cells */
+}
+
+.favored-team .team-logo {
+    box-shadow: 0 0 8px 1px var(--secondary-color); /* Creates a yellow glow */
+    border-radius: 20%; /* Makes the glow circular */
 }
