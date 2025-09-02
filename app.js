@@ -134,7 +134,7 @@ function setupAuthListeners() {
         return alert('Error signing up: ' + error.message);
     }
     // The profile is now created automatically by the database trigger.
-    alert('Sign up successful!');
+    alert('Sign up successful! Please log in.'); // Changed message to be clearer
     e.target.reset();
 });
 
@@ -143,7 +143,11 @@ function setupAuthListeners() {
         const email = document.getElementById('login-email').value;
         const password = document.getElementById('login-password').value;
         const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) alert('Error logging in: ' + error.message);
+        if (error) {
+             alert('Error logging in: ' + error.message);
+        }
+        // NOTE: The explicit "window.location.hash" redirect has been removed.
+        // The onAuthStateChange handler will now correctly manage the redirect.
     });
 }
 
@@ -271,52 +275,61 @@ async function displayDashboard() {
     const pendingBody = document.getElementById('pending-picks-body');
     const historyBody = document.getElementById('pick-history-body');
 
-    // Clear previous state
+    // Set loading state immediately
     pendingBody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
     historyBody.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
     document.getElementById('pending-picks-week').textContent = defaultWeek;
 
-    if (!currentSelectedMatchId) {
-        pendingBody.innerHTML = `<tr><td colspan="3">Please join a match to see your picks.</td></tr>`;
-        historyBody.innerHTML = `<tr><td colspan="4">No pick history to show.</td></tr>`;
-        return;
-    }
+    try {
+        if (!currentSelectedMatchId) {
+            pendingBody.innerHTML = `<tr><td colspan="3">Please join or select a match to see your picks.</td></tr>`;
+            historyBody.innerHTML = `<tr><td colspan="4">No pick history to show.</td></tr>`;
+            return;
+        }
 
-    // Fetch picks FILTERED BY THE GLOBAL MATCH ID
-    const [pendingPicksRes, pastPicksRes] = await Promise.all([
-        supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('match_id', currentSelectedMatchId).is('is_correct', null),
-        supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('match_id', currentSelectedMatchId).not('is_correct', 'is', null).order('created_at', { ascending: false })
-    ]);
-    
-    // Render Pending Picks
-    pendingBody.innerHTML = '';
-    const pendingPicksForWeek = pendingPicksRes.data?.filter(p => p.week === defaultWeek) || [];
-    if (pendingPicksForWeek.length > 0) {
-        pendingPicksForWeek.forEach(pick => {
-            const game = allGames.find(g => g['Game Id'] == pick.game_id);
-            const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID: ${pick.game_id}`;
-            const doubleUp = pick.is_double_up ? ' 🔥' : '';
-            pendingBody.innerHTML += `<tr><td>${gameName}</td><td>${pick.picked_team}</td><td>${pick.wager}${doubleUp}</td></tr>`;
-        });
-    } else {
-        pendingBody.innerHTML = `<tr><td colspan="3">No pending picks for ${defaultWeek}.</td></tr>`;
-    }
+        const [pendingPicksRes, pastPicksRes] = await Promise.all([
+            supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('match_id', currentSelectedMatchId).is('is_correct', null),
+            supabase.from('picks').select('*').eq('user_id', currentUser.id).eq('match_id', currentSelectedMatchId).not('is_correct', 'is', null).order('created_at', { ascending: false })
+        ]);
 
-    // Render Pick History
-    historyBody.innerHTML = '';
-    if (pastPicksRes.data?.length > 0) {
-        pastPicksRes.data.forEach(pick => {
-            const game = allGames.find(g => g['Game Id'] == pick.game_id);
-            const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID: ${pick.game_id}`;
-            const resultClass = pick.is_correct ? 'correct' : 'incorrect';
-            const resultText = pick.is_correct ? 'Correct' : 'Incorrect';
-            let points = pick.is_correct ? pick.wager : (pick.wager * -2);
-            if (pick.is_double_up) points *= 2;
-            const pointsText = points > 0 ? `+${points}` : points;
-            historyBody.innerHTML += `<tr><td>${gameName} (${pick.week})</td><td>${pick.picked_team}</td><td class="${resultClass}">${resultText}</td><td>${pointsText}</td></tr>`;
-        });
-    } else {
-        historyBody.innerHTML = '<tr><td colspan="4">No pick history yet.</td></tr>';
+        if (pendingPicksRes.error) throw pendingPicksRes.error;
+        if (pastPicksRes.error) throw pastPicksRes.error;
+        
+        // Render Pending Picks
+        pendingBody.innerHTML = '';
+        const pendingPicksForWeek = pendingPicksRes.data?.filter(p => p.week === defaultWeek) || [];
+        if (pendingPicksForWeek.length > 0) {
+            pendingPicksForWeek.forEach(pick => {
+                const game = allGames.find(g => g['Game Id'] == pick.game_id);
+                const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID: ${pick.game_id}`;
+                const doubleUp = pick.is_double_up ? ' 🔥' : '';
+                pendingBody.innerHTML += `<tr><td>${gameName}</td><td>${pick.picked_team}</td><td>${pick.wager}${doubleUp}</td></tr>`;
+            });
+        } else {
+            pendingBody.innerHTML = `<tr><td colspan="3">No pending picks for ${defaultWeek}.</td></tr>`;
+        }
+
+        // Render Pick History
+        historyBody.innerHTML = '';
+        if (pastPicksRes.data?.length > 0) {
+            pastPicksRes.data.forEach(pick => {
+                const game = allGames.find(g => g['Game Id'] == pick.game_id);
+                const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID: ${pick.game_id}`;
+                const resultClass = pick.is_correct ? 'correct' : 'incorrect';
+                const resultText = pick.is_correct ? 'Correct' : 'Incorrect';
+                let points = pick.is_correct ? pick.wager : (pick.wager * -2);
+                if (pick.is_double_up) points *= 2;
+                const pointsText = points > 0 ? `+${points}` : points;
+                historyBody.innerHTML += `<tr><td>${gameName} (${pick.week})</td><td>${pick.picked_team}</td><td class="${resultClass}">${resultText}</td><td>${pointsText}</td></tr>`;
+            });
+        } else {
+            historyBody.innerHTML = '<tr><td colspan="4">No pick history yet.</td></tr>';
+        }
+
+    } catch (error) {
+        console.error("Error displaying dashboard:", error.message);
+        pendingBody.innerHTML = '<tr><td colspan="3">Could not load picks due to an error.</td></tr>';
+        historyBody.innerHTML = '<tr><td colspan="4">Could not load pick history due to an error.</td></tr>';
     }
 }
 
@@ -337,38 +350,42 @@ async function displayScoreboardPage() {
 }
 
 async function loadScoreboardForMatch(matchId) {
-    // 1. Fetch all members in the current match
-    const { data: members, error: membersError } = await supabase
-        .from('match_members')
-        .select('profiles (id, username)')
-        .eq('match_id', matchId);
+    try {
+        const { data: members, error: membersError } = await supabase
+            .from('match_members')
+            .select('profiles (id, username)')
+            .eq('match_id', matchId);
 
-    if (membersError) return console.error("Error fetching members:", membersError);
-    if (!members || members.length === 0) return;
+        if (membersError) throw membersError;
+        if (!members || members.length === 0) return;
 
-    // 2. Fetch all historical, scored picks FOR THIS SPECIFIC MATCH
-    const { data: allScoredPicks, error: picksError } = await supabase
-        .from('picks')
-        .select('user_id, week, wager, is_double_up, is_correct')
-        .eq('match_id', matchId) // Filter by the match ID
-        .not('is_correct', 'is', null);
+        const { data: allScoredPicks, error: picksError } = await supabase
+            .from('picks')
+            .select('user_id, week, wager, is_double_up, is_correct')
+            .eq('match_id', matchId)
+            .not('is_correct', 'is', null);
 
-    if (picksError) return console.error("Error fetching historical picks:", picksError);
+        if (picksError) throw picksError;
 
-    // 3. Process the raw picks (this function does not need to change)
-    const chartData = processWeeklyScores(members, allScoredPicks || []);
-    renderScoreChart(chartData);
+        const chartData = processWeeklyScores(members, allScoredPicks || []);
+        renderScoreChart(chartData);
 
-    // 4. Fetch the CURRENT week's picks for the run sheet FOR THIS SPECIFIC MATCH
-    const selectedWeek = defaultWeek;
-    document.getElementById('scoreboard-week-title').textContent = selectedWeek;
-    const { data: allCurrentPicks } = await supabase
-        .from('picks')
-        .select('picked_team, wager, is_double_up, game_id, user_id')
-        .eq('match_id', matchId) // Filter by the match ID
-        .eq('week', selectedWeek);
-    
-    renderRunSheet(members, allCurrentPicks || [], selectedWeek);
+        const selectedWeek = defaultWeek;
+        document.getElementById('scoreboard-week-title').textContent = selectedWeek;
+        const { data: allCurrentPicks, error: currentPicksError } = await supabase
+            .from('picks')
+            .select('picked_team, wager, is_double_up, game_id, user_id')
+            .eq('match_id', matchId)
+            .eq('week', selectedWeek);
+        
+        if (currentPicksError) throw currentPicksError;
+        
+        renderRunSheet(members, allCurrentPicks || [], selectedWeek);
+
+    } catch (error) {
+        console.error("Error loading scoreboard data:", error.message);
+        document.getElementById('run-sheet-container').innerHTML = `<p class="card">Could not load scoreboard due to an error.</p>`;
+    }
 }
 
 // *** ADD THIS NEW HELPER FUNCTION ***
@@ -522,7 +539,8 @@ function renderRunSheet(members, allPicks, week) {
     const sortedMembers = [...members].sort((a, b) => a.profiles.username.localeCompare(b.profiles.username));
     let tableHtml = '<table class="run-sheet-table">';
 
-    tableHtml += '<thead><tr><th>Game</th><th>Odds</th>';
+    // The "Odds" header has been removed here
+    tableHtml += '<thead><tr><th>Game</th>';
     sortedMembers.forEach(member => {
         tableHtml += `<th>${member.profiles.username}</th>`;
     });
@@ -531,56 +549,47 @@ function renderRunSheet(members, allPicks, week) {
     tableHtml += '<tbody>';
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
-        // FOR TESTING: Uncomment the next line to see all picks
-        // const hasKickedOff = true;
         const hasKickedOff = kickoff < now;
         const isFinal = game.Status === 'post';
         const awayScore = isFinal ? game['Away Score'] : '-';
         const homeScore = isFinal ? game['Home Score'] : '-';
-        const oddsText = game.Odds || '-';
+
+        // --- NEW: Logic to determine which team is favored ---
+        const favoredTeam = game['Favored Team'];
+        const isAwayFavored = favoredTeam === game['Away'];
+        const isHomeFavored = favoredTeam === game['Home'];
 
         tableHtml += `<tr>
             <td class="game-matchup-cell">
-                <div class="matchup-team-container">
+                <div class="matchup-team-container ${isAwayFavored ? 'favored-team' : ''}">
                     <img src="${game['Away Logo']}" alt="${game['Away']}" class="team-logo">
                     <div class="team-info-wrapper">
-                         <span class="team-code">${game['Away']}</span>
                          <span class="team-score">${awayScore}</span>
                     </div>
                 </div>
-                <div class="matchup-team-container">
+                <div class="matchup-team-container ${isHomeFavored ? 'favored-team' : ''}">
                     <img src="${game['Home Logo']}" alt="${game['Home']}" class="team-logo">
                      <div class="team-info-wrapper">
-                         <span class="team-code">${game['Home']}</span>
                          <span class="team-score">${homeScore}</span>
                     </div>
                 </div>
-            </td>
-            <td class="odds-cell">${oddsText}</td>`;
+            </td>`;
         
-        // --- THIS IS THE UPDATED LOGIC FOR PLAYER PICKS ---
         sortedMembers.forEach(member => {
             const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
 
             if (pick && hasKickedOff) {
-                // 1. Get the logo URL for the picked team
                 const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] 
                     ? game['Home Logo'] 
                     : game['Away Logo'];
-
-                // 2. Determine if the fire emoji should be shown
                 const doubleUpEmoji = pick.is_double_up ? ' 🔥' : '';
-
-                // 3. Construct the HTML content for the cell with the logo and wager text
                 const cellContent = `
                     <div class="pick-content-wrapper">
                         <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="pick-logo" title="${pick.picked_team}">
                         <span>- ${pick.wager}${doubleUpEmoji}</span>
                     </div>
                 `;
-                
                 tableHtml += `<td class="pick-cell wager-${pick.wager}">${cellContent}</td>`;
-
             } else {
                 tableHtml += `<td class="locked-pick"><i>🔒</i></td>`;
             }
@@ -599,37 +608,36 @@ async function displayMatchesPage() {
     const container = document.getElementById('matches-list-container');
     container.innerHTML = '<p>Loading public matches...</p>';
 
-    // Fetch both all public matches and the user's current memberships at the same time
-    const [publicMatchesRes, userMembershipsRes] = await Promise.all([
-        supabase.from('matches').select('id, name').eq('is_public', true),
-        supabase.from('match_members').select('match_id').eq('user_id', currentUser.id)
-    ]);
+    try {
+        const [publicMatchesRes, userMembershipsRes] = await Promise.all([
+            supabase.from('matches').select('id, name').eq('is_public', true),
+            supabase.from('match_members').select('match_id').eq('user_id', currentUser.id)
+        ]);
 
-    const { data: publicMatches, error: matchesError } = publicMatchesRes;
-    const { data: userMemberships, error: membershipsError } = userMembershipsRes;
+        if (publicMatchesRes.error) throw publicMatchesRes.error;
+        if (userMembershipsRes.error) throw userMembershipsRes.error;
 
-    if (matchesError || membershipsError) {
-        return container.innerHTML = '<p>Could not load matches. Please try again.</p>';
+        const publicMatches = publicMatchesRes.data;
+        const userMemberships = userMembershipsRes.data;
+
+        if (!publicMatches || publicMatches.length === 0) {
+            return container.innerHTML = '<p>No public matches found. Why not create one?</p>';
+        }
+
+        const joinedMatchIds = new Set(userMemberships.map(m => m.match_id));
+
+        container.innerHTML = publicMatches.map(match => {
+            const isJoined = joinedMatchIds.has(match.id);
+            const buttonHtml = isJoined
+                ? `<button class="button-secondary" disabled>Currently Joined</button>`
+                : `<button class="button-primary join-match-btn" data-match-id="${match.id}">Join</button>`;
+            return `<div class="match-item"><span>${match.name}</span>${buttonHtml}</div>`;
+        }).join('');
+
+    } catch (error) {
+        console.error("Error displaying matches page:", error.message);
+        container.innerHTML = '<p>Could not load matches due to an error. Please try again.</p>';
     }
-
-    if (!publicMatches || publicMatches.length === 0) {
-        return container.innerHTML = '<p>No public matches found. Why not create one?</p>';
-    }
-
-    // Create a Set of the user's joined match IDs for a fast and easy lookup
-    const joinedMatchIds = new Set(userMemberships.map(m => m.match_id));
-
-    // Map over the public matches and generate the correct HTML for each one
-    container.innerHTML = publicMatches.map(match => {
-        const isJoined = joinedMatchIds.has(match.id);
-
-        // Conditionally create either a "Join" button or a disabled "Currently Joined" button
-        const buttonHtml = isJoined
-            ? `<button class="button-secondary" disabled>Currently Joined</button>`
-            : `<button class="button-primary join-match-btn" data-match-id="${match.id}">Join</button>`;
-        
-        return `<div class="match-item"><span>${match.name}</span>${buttonHtml}</div>`;
-    }).join('');
 }
 
 // =================================================================
@@ -682,17 +690,24 @@ async function savePicks() {
     
     const selectedWeek = document.getElementById('week-selector').value;
     
-    // --- THE FIX IS HERE ---
-    // BEFORE (causes the error): 
-    // const selectedMatchId = document.getElementById('match-selector-picks').value;
-    
-    // AFTER (correct way): Use the global state variable we already set.
     if (!currentSelectedMatchId) {
         return alert("Error: No match has been selected. This might happen if you are not in any matches.");
     }
 
     try {
-        // This validation logic is still correct
+        // --- NEW: Minimum picks validation ---
+        // Count how many picks have a team selected
+        const validPicksCount = Object.values(userPicks).filter(pick => pick).length;
+
+        // If the user has made some picks (more than 0), but fewer than 5, block them.
+        // This still allows the user to save with 0 picks, which is how they clear their slate for the week.
+        if (validPicksCount > 0 && validPicksCount < 5) {
+            throw new Error(`You must make a minimum of 5 picks to save. You currently have ${validPicksCount}.`);
+        }
+        // --- End of new validation ---
+
+
+        // This validation logic for wagers is still correct
         for (const gameId in userPicks) {
             if (userPicks[gameId] && !userWagers[gameId]) {
                 const game = allGames.find(g => g['Game Id'] === gameId);
@@ -700,11 +715,10 @@ async function savePicks() {
             }
         }
 
-        // Now, we use the global `currentSelectedMatchId` variable when building the picks
         const picksToUpsert = Object.keys(userPicks).filter(gameId => userPicks[gameId] !== undefined).map(gameId => ({
             user_id: currentUser.id,
             game_id: parseInt(gameId, 10),
-            match_id: currentSelectedMatchId, // Use the global variable
+            match_id: currentSelectedMatchId,
             picked_team: userPicks[gameId],
             wager: userWagers[gameId],
             is_double_up: gameId === doubleUpPick,
@@ -722,13 +736,13 @@ async function savePicks() {
             const { error } = await supabase.from('picks')
                 .delete()
                 .eq('user_id', currentUser.id)
-                .eq('match_id', currentSelectedMatchId) // Use the global variable
+                .eq('match_id', currentSelectedMatchId)
                 .in('game_id', picksToDelete);
             if (error) throw error;
         }
 
         alert('Your picks have been saved for this match!');
-        renderGamesForWeek(selectedWeek, currentSelectedMatchId); // Use the global variable
+        renderGamesForWeek(selectedWeek, currentSelectedMatchId);
     } catch (error) {
         console.error("Save Picks Error:", error);
         alert('Error: ' + error.message);
@@ -923,19 +937,29 @@ async function init() {
         return;
     }
     
-    supabase.auth.onAuthStateChange(async (event, session) => { // Make it async
+    supabase.auth.onAuthStateChange(async (event, session) => {
         currentUser = session?.user || null;
         updateUserStatusUI();
-        
-        // This sets up the selector and determines the initial match ID
-        await setupGlobalMatchSelector(); 
-        
-        const hash = window.location.hash.substring(1);
-        const pageId = (hash || 'home') + '-page';
-        if (currentUser) {
-            showPage(document.getElementById(pageId) ? pageId : 'home-page');
-        } else {
-            showPage('auth-page');
+
+        // --- THIS IS THE CORRECTED LOGIC ---
+        try {
+            // We still attempt to load the user's matches first.
+            if (currentUser) {
+                await setupGlobalMatchSelector();
+            }
+        } catch (error) {
+            // If it fails, we log the error but DON'T stop the app.
+            console.error("Error setting up global match selector:", error.message);
+        } finally {
+            // This "finally" block will ALWAYS run, whether the try succeeded or failed.
+            // This guarantees the correct page is always shown.
+            const hash = window.location.hash.substring(1);
+            const pageId = (hash || 'home') + '-page';
+            if (currentUser) {
+                showPage(document.getElementById(pageId) ? pageId : 'home-page');
+            } else {
+                showPage('auth-page');
+            }
         }
     });
 }
