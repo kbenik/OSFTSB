@@ -58,10 +58,22 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 
 /* --- Home Page / Dashboard Styles are unchanged --- */
 .pick-history-table { width: 100%; border-collapse: collapse; }
-.pick-history-table th, .pick-history-table td { padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }
+.pick-history-table th, .pick-history-table td { padding: 12px; text-align: center; border-bottom: 1px solid #ddd; }
 .pick-history-table th { background-color: #f2f2f2; }
 .pick-history-table .correct { color: green; font-weight: bold; }
 .pick-history-table .incorrect { color: red; font-weight: bold; }
+
+.pick-history-table .team-logo-display {
+    display: none; /* Hidden by default on desktop */
+    align-items: center;
+    justify-content: center; /* Center logos in the cell */
+    gap: 5px;
+}
+
+.pick-history-table .table-logo {
+    width: 24px;
+    height: 24px;
+}
 
 /* --- Picks Page Styles --- */
 .game-card { display: grid; grid-template-columns: 1fr auto 1fr; grid-template-rows: auto auto auto; gap: 10px 15px; align-items: center; margin-bottom: 20px; padding: 15px; border: 1px solid #e0e0e0; border-radius: var(--border-radius); background-color: var(--card-background); box-shadow: var(--box-shadow); position: relative; }
@@ -152,6 +164,13 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     .wager-controls { flex-direction: column; gap: 15px; }
     .pick-history-table { font-size: 0.9rem; }
     .pick-history-table th, .pick-history-table td { padding: 8px 5px; }
+    .pick-history-table .team-name-text {
+        display: none; /* Hide text on mobile */
+    }
+
+    .pick-history-table .team-logo-display {
+        display: flex; /* Show logos on mobile */
+    }
 }
 /* Scoreboard Chart Styles */
 .chart-container {
