@@ -301,9 +301,33 @@ async function displayDashboard() {
         if (pendingPicksForWeek.length > 0) {
             pendingPicksForWeek.forEach(pick => {
                 const game = allGames.find(g => g['Game Id'] == pick.game_id);
-                const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID: ${pick.game_id}`;
                 const doubleUp = pick.is_double_up ? ' 🔥' : '';
-                pendingBody.innerHTML += `<tr><td>${gameName}</td><td>${pick.picked_team}</td><td>${pick.wager}${doubleUp}</td></tr>`;
+                
+                if (game) { // Check if game data was found
+                    const gameNameText = `${game['Away Display Name']} @ ${game['Home Display Name']}`;
+                    const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] 
+                        ? game['Home Logo'] 
+                        : game['Away Logo'];
+
+                    pendingBody.innerHTML += `
+                        <tr>
+                            <td>
+                                <span class="team-name-text">${gameNameText}</span>
+                                <div class="team-logo-display">
+                                    <img src="${game['Away Logo']}" alt="${game['Away Display Name']}" class="table-logo">
+                                    <span>@</span>
+                                    <img src="${game['Home Logo']}" alt="${game['Home Display Name']}" class="table-logo">
+                                </div>
+                            </td>
+                            <td>
+                                <span class="team-name-text">${pick.picked_team}</span>
+                                <div class="team-logo-display">
+                                    <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="table-logo">
+                                </div>
+                            </td>
+                            <td>${pick.wager}${doubleUp}</td>
+                        </tr>`;
+                }
             });
         } else {
             pendingBody.innerHTML = `<tr><td colspan="3">No pending picks for ${defaultWeek}.</td></tr>`;
@@ -314,13 +338,38 @@ async function displayDashboard() {
         if (pastPicksRes.data?.length > 0) {
             pastPicksRes.data.forEach(pick => {
                 const game = allGames.find(g => g['Game Id'] == pick.game_id);
-                const gameName = game ? `${game['Away Display Name']} @ ${game['Home Display Name']}` : `Game ID: ${pick.game_id}`;
                 const resultClass = pick.is_correct ? 'correct' : 'incorrect';
                 const resultText = pick.is_correct ? 'Correct' : 'Incorrect';
                 let points = pick.is_correct ? pick.wager : (pick.wager * -2);
                 if (pick.is_double_up) points *= 2;
                 const pointsText = points > 0 ? `+${points}` : points;
-                historyBody.innerHTML += `<tr><td>${gameName} (${pick.week})</td><td>${pick.picked_team}</td><td class="${resultClass}">${resultText}</td><td>${pointsText}</td></tr>`;
+
+                if (game) { // Check if game data was found
+                    const gameNameText = `${game['Away Display Name']} @ ${game['Home Display Name']} (${pick.week})`;
+                    const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] 
+                        ? game['Home Logo'] 
+                        : game['Away Logo'];
+                    
+                    historyBody.innerHTML += `
+                        <tr>
+                            <td>
+                                <span class="team-name-text">${gameNameText}</span>
+                                <div class="team-logo-display">
+                                    <img src="${game['Away Logo']}" alt="${game['Away Display Name']}" class="table-logo">
+                                    <span>@</span>
+                                    <img src="${game['Home Logo']}" alt="${game['Home Display Name']}" class="table-logo">
+                                </div>
+                            </td>
+                            <td>
+                                <span class="team-name-text">${pick.picked_team}</span>
+                                <div class="team-logo-display">
+                                    <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="table-logo">
+                                </div>
+                            </td>
+                            <td class="${resultClass}">${resultText}</td>
+                            <td>${pointsText}</td>
+                        </tr>`;
+                }
             });
         } else {
             historyBody.innerHTML = '<tr><td colspan="4">No pick history yet.</td></tr>';
