@@ -379,3 +379,17 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     box-shadow: 0 0 8px 1px var(--secondary-color); /* Creates a yellow glow */
     border-radius: 20%; /* Makes the glow circular */
 }
+.picks-reminder-banner {
+    background-color: var(--secondary-color); /* NFL Red */
+    color: white;
+    padding: 0px 0;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.3s ease-in-out;
+}
+
+.picks-reminder-banner p {
+    margin: 0;
+    font-weight: 600;
+    font-size: 1rem;
+}
