@@ -382,6 +382,87 @@ async function displayDashboard() {
     }
 }
 
+// REPLACE the old checkAndDisplayPicksReminder function with this new version
+
+async function checkAndDisplayPicksReminder() {
+    const banner = document.getElementById('picks-reminder-banner');
+    // We no longer check for currentSelectedMatchId here, as we need to check all matches.
+    if (!currentUser) {
+        banner.classList.add('hidden');
+        return;
+    }
+
+    // --- Date and Week Logic (This part remains the same) ---
+    const now = new Date();
+    const gamesForDefaultWeek = allGames.filter(g => g.Week === defaultWeek);
+    if (gamesForDefaultWeek.length === 0) {
+        banner.classList.add('hidden');
+        return;
+    }
+    const firstKickoff = gamesForDefaultWeek
+        .map(getKickoffTimeAsDate)
+        .sort((a, b) => a - b)[0];
+    const tuesdayOfThatWeek = new Date(firstKickoff);
+    const dayOfWeek = tuesdayOfThatWeek.getUTCDay();
+    const daysToSubtract = dayOfWeek >= 2 ? (dayOfWeek - 2) : (dayOfWeek + 5);
+    tuesdayOfThatWeek.setUTCDate(tuesdayOfThatWeek.getUTCDate() - daysToSubtract);
+    tuesdayOfThatWeek.setUTCHours(10, 0, 0, 0);
+
+    // Only show the banner if we are within the active reminder period.
+    if (now < tuesdayOfThatWeek || now > firstKickoff) {
+        banner.classList.add('hidden');
+        return;
+    }
+
+    // --- NEW LOGIC: Check picks across ALL joined matches ---
+    try {
+        // 1. Get all match IDs the user is a member of.
+        const { data: memberships, error: membershipError } = await supabase
+            .from('match_members')
+            .select('match_id')
+            .eq('user_id', currentUser.id);
+
+        if (membershipError || !memberships || memberships.length === 0) {
+            banner.classList.add('hidden'); // User isn't in any matches, so no reminder needed.
+            return;
+        }
+        const joinedMatchIds = new Set(memberships.map(m => m.match_id));
+
+        // 2. Get the distinct match IDs for which the user has already made picks this week.
+        const { data: picks, error: picksError } = await supabase
+            .from('picks')
+            .select('match_id')
+            .eq('user_id', currentUser.id)
+            .eq('week', defaultWeek);
+
+        if (picksError) {
+            console.error("Error fetching picks for banner check:", picksError);
+            banner.classList.add('hidden'); // Hide on error to be safe.
+            return;
+        }
+        const matchesWithPicks = new Set(picks.map(p => p.match_id));
+
+        // 3. Compare the two sets. If any joined match doesn't have picks, show the banner.
+        let needsToMakePicks = false;
+        for (const matchId of joinedMatchIds) {
+            // If a joined match is NOT in the set of matches with picks, we need to show the reminder.
+            if (!matchesWithPicks.has(matchId)) {
+                needsToMakePicks = true;
+                break; // We found at least one, so we can stop checking.
+            }
+        }
+
+        if (needsToMakePicks) {
+            banner.classList.remove('hidden');
+        } else {
+            banner.classList.add('hidden');
+        }
+
+    } catch (err) {
+        console.error("Failed to check for picks reminder:", err);
+        banner.classList.add('hidden');
+    }
+}
 async function displayScoreboardPage() {
     const runSheetContainer = document.getElementById('run-sheet-container');
     
@@ -995,7 +1076,11 @@ async function init() {
             // We still attempt to load the user's matches first.
             if (currentUser) {
                 await setupGlobalMatchSelector();
-            }
+                await checkAndDisplayPicksReminder();
+            } else {
+            // If there's no user, ensure the banner is hidden
+            document.getElementById('picks-reminder-banner').classList.add('hidden');
+        }
         } catch (error) {
             // If it fails, we log the error but DON'T stop the app.
             console.error("Error setting up global match selector:", error.message);
