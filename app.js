@@ -1,4 +1,4 @@
-// =================================================================
+\// =================================================================
 // CONFIGURATION & INITIALIZATION
 // =================================================================
 const SUPABASE_URL = 'https://mtjflkwoxjnwaawjlaxy.supabase.co';
@@ -110,6 +110,9 @@ function showPage(pageId) {
                 break;
             case 'matches-page':
                 displayMatchesPage();
+                break;
+            case 'rules-page':
+                // No specific JS needed for this static page, but the case is here for completeness.
                 break;
         }
     }
@@ -1067,33 +1070,46 @@ async function init() {
         return;
     }
     
-    supabase.auth.onAuthStateChange(async (event, session) => {
-        currentUser = session?.user || null;
-        updateUserStatusUI();
+   supabase.auth.onAuthStateChange(async (event, session) => {
+    currentUser = session?.user || null;
+    updateUserStatusUI();
 
-        // --- THIS IS THE CORRECTED LOGIC ---
-        try {
-            // We still attempt to load the user's matches first.
-            if (currentUser) {
-                await setupGlobalMatchSelector();
-                await checkAndDisplayPicksReminder();
-            } else {
-            // If there's no user, ensure the banner is hidden
+    try {
+        if (currentUser) {
+            await setupGlobalMatchSelector(); // This function correctly sets currentSelectedMatchId
+            await checkAndDisplayPicksReminder();
+        } else {
+            // If there's no user, ensure banners are hidden
             document.getElementById('picks-reminder-banner').classList.add('hidden');
         }
-        } catch (error) {
-            // If it fails, we log the error but DON'T stop the app.
-            console.error("Error setting up global match selector:", error.message);
-        } finally {
-            // This "finally" block will ALWAYS run, whether the try succeeded or failed.
-            // This guarantees the correct page is always shown.
-            const hash = window.location.hash.substring(1);
-            const pageId = (hash || 'home') + '-page';
-            if (currentUser) {
-                showPage(document.getElementById(pageId) ? pageId : 'home-page');
-            } else {
-                showPage('auth-page');
-            }
+    } catch (error) {
+        console.error("Error during auth state change setup:", error.message);
+    } finally {
+        // --- This is where the updated routing logic lives ---
+
+        // Hide the loading screen first
+        const loadingOverlay = document.getElementById('loading-overlay');
+        if (loadingOverlay) {
+            loadingOverlay.classList.add('hidden');
         }
-    });
+
+        if (currentUser) {
+            // *** NEW LOGIC BLOCK ***
+            // Check if the user is in any matches. currentSelectedMatchId will be null
+            // after setupGlobalMatchSelector() runs if they are in zero matches.
+            if (!currentSelectedMatchId) {
+                // If they are in zero matches, force redirect to the matches page.
+                showPage('matches-page');
+            } else {
+                // Otherwise, use the normal logic: go to the URL hash or default to home.
+                const hash = window.location.hash.substring(1);
+                const pageId = (hash || 'home') + '-page';
+                showPage(document.getElementById(pageId) ? pageId : 'home-page');
+            }
+        } else {
+            // If not logged in, show the auth page.
+            showPage('auth-page');
+        }
+    }
+});
 }
