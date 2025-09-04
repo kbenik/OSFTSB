@@ -388,8 +388,30 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     transition: all 0.3s ease-in-out;
 }
 
-.picks-reminder-banner p {
-    margin: 0;
+.reminder-link-button {
+    color: white;
+    text-decoration: none; /* Remove the underline */
     font-weight: 600;
     font-size: 1rem;
+    display: block; /* Makes the entire area of the link clickable */
+    padding: 0px 0px;
+    border-radius: 5px;
+    transition: background-color 0.2s ease-in-out;
+}
+
+/* Add a hover effect for better user feedback */
+.reminder-link-button:hover {
+    background-color: rgba(0, 0, 0, 0.15); /* Slightly darken the red background */
+}
+
+/* We still need the main banner style */
+.picks-reminder-banner {
+    background-color: var(--secondary-color); /* NFL Red */
+    color: white;
+    padding: 0px 0;
+    text-align: center;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: all 0.3s ease-in-out;
+    border-bottom-left-radius: 15px; /* Adjust the value as needed */
+    border-bottom-right-radius: 15px;
 }
