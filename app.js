@@ -672,7 +672,6 @@ function renderRunSheet(members, allPicks, week) {
     const sortedMembers = [...members].sort((a, b) => a.profiles.username.localeCompare(b.profiles.username));
     let tableHtml = '<table class="run-sheet-table">';
 
-    // The "Odds" header has been removed here
     tableHtml += '<thead><tr><th>Game</th>';
     sortedMembers.forEach(member => {
         tableHtml += `<th>${member.profiles.username}</th>`;
@@ -686,8 +685,6 @@ function renderRunSheet(members, allPicks, week) {
         const isFinal = game.Status === 'post';
         const awayScore = isFinal ? game['Away Score'] : '-';
         const homeScore = isFinal ? game['Home Score'] : '-';
-
-        // --- NEW: Logic to determine which team is favored ---
         const favoredTeam = game['Favored Team'];
         const isAwayFavored = favoredTeam === game['Away'];
         const isHomeFavored = favoredTeam === game['Home'];
@@ -711,19 +708,29 @@ function renderRunSheet(members, allPicks, week) {
         sortedMembers.forEach(member => {
             const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
 
-            if (pick && hasKickedOff) {
-                const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] 
-                    ? game['Home Logo'] 
-                    : game['Away Logo'];
-                const doubleUpEmoji = pick.is_double_up ? ' 🔥' : '';
-                const cellContent = `
-                    <div class="pick-content-wrapper">
-                        <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="pick-logo" title="${pick.picked_team}">
-                        <span>- ${pick.wager}${doubleUpEmoji}</span>
-                    </div>
-                `;
-                tableHtml += `<td class="pick-cell wager-${pick.wager}">${cellContent}</td>`;
+            // *** CHANGE #1: The logic is now split. First, we check if the game has kicked off. ***
+            if (hasKickedOff) {
+                // If it has, we then check if the user actually made a pick.
+                if (pick) {
+                    const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] 
+                        ? game['Home Logo'] 
+                        : game['Away Logo'];
+                    const doubleUpEmoji = pick.is_double_up ? ' 🔥' : '';
+                    
+                    // *** CHANGE #2: The hyphen has been removed from the span below. ***
+                    const cellContent = `
+                        <div class="pick-content-wrapper">
+                            <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="pick-logo" title="${pick.picked_team}">
+                            <span>${pick.wager}${doubleUpEmoji}</span>
+                        </div>
+                    `;
+                    tableHtml += `<td class="pick-cell wager-${pick.wager}">${cellContent}</td>`;
+                } else {
+                    // If the game started but the user made no pick, render an empty cell.
+                    tableHtml += `<td></td>`;
+                }
             } else {
+                // If the game has NOT kicked off yet, show the lock icon.
                 tableHtml += `<td class="locked-pick"><i>🔒</i></td>`;
             }
         });
