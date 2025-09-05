@@ -416,3 +416,13 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     border-bottom-right-radius: 15px;
 }
 
+.run-sheet-description {
+    margin-top: 0; /* Remove the default top margin */
+    margin-bottom: 1rem; /* Add a controlled amount of space below */
+    font-size: 0.9rem;
+    color: #666;
+    background-color: #fdf8e1; /* Optional: A light yellow background to make it stand out */
+    padding: 10px;
+    border-radius: 5px;
+    border-left: 4px solid var(--accent-color);
+}
