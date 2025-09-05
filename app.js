@@ -683,8 +683,9 @@ function renderRunSheet(members, allPicks, week) {
         const kickoff = getKickoffTimeAsDate(game);
         const hasKickedOff = kickoff < now;
         const isFinal = game.Status === 'post';
-        const awayScore = isFinal ? game['Away Score'] : '-';
-        const homeScore = isFinal ? game['Home Score'] : '-';
+        const showScore = game.Status !== 'pre';
+        const awayScore = showScore ? game['Away Score'] : '-';
+        const homeScore = showScore ? game['Home Score'] : '-';
         const favoredTeam = game['Favored Team'];
         const isAwayFavored = favoredTeam === game['Away'];
         const isHomeFavored = favoredTeam === game['Home'];
