@@ -8,6 +8,7 @@ const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95t
 
 // --- STATE MANAGEMENT ---
 let allGames = [];
+let teamData = {};
 let defaultWeek = '';
 let currentUser = null;
 let userPicks = {};
@@ -25,19 +26,55 @@ document.addEventListener('DOMContentLoaded', init);
 // =================================================================
 // UTILITY & HELPER FUNCTIONS
 // =================================================================
+// REPLACE your current parseCSV function with this FINAL, robust version
 function parseCSV(csvText) {
-    const lines = csvText.trim().split('\n');
+    // Standardize line endings and then split into lines
+    const lines = csvText.trim().replace(/\r\n/g, '\n').split('\n');
+
     if (lines.length < 2) return [];
+
     const headers = lines[0].split(',').map(h => h.trim());
-    return lines.slice(1).map(line => {
-        const values = line.split(',');
-        const game = {};
-        headers.forEach((header, index) => {
-            let value = values[index] || '';
-            game[header] = value.replace(/^"|"$/g, '').trim();
-        });
-        return game;
-    });
+    
+    // This regex is correct for handling quoted fields.
+    const regex = /(?:"([^"]*)"|([^,]*))(?:,|$)/g;
+
+    const dataRows = lines.slice(1)
+        .map(line => {
+            // *** THIS IS THE FIX ***
+            // If the line is empty or just whitespace, return null to filter it out later.
+            if (!line || line.trim() === '') {
+                return null;
+            }
+
+            const values = [];
+            let match;
+            regex.lastIndex = 0; // Reset regex state for each new line
+
+            while (match = regex.exec(line)) {
+                // Failsafe: if the regex matched a zero-length string at the same position,
+                // it's an infinite loop. Break out.
+                if (match.index === regex.lastIndex) {
+                    regex.lastIndex++;
+                }
+                values.push(match[1] || match[2] || '');
+            }
+
+            // Remove the extra empty value that the regex can sometimes add at the end
+            if (values.length > headers.length) {
+                values.pop();
+            }
+
+            const game = {};
+            headers.forEach((header, index) => {
+                let value = values[index] || '';
+                game[header] = value.trim();
+            });
+            return game;
+        })
+        // Filter out any rows that were marked as null (i.e., the empty ones)
+        .filter(game => game !== null);
+    
+    return dataRows;
 }
 
 function getKickoffTimeAsDate(game) {
@@ -278,7 +315,6 @@ async function displayDashboard() {
     const pendingBody = document.getElementById('pending-picks-body');
     const historyBody = document.getElementById('pick-history-body');
 
-    // Set loading state immediately
     pendingBody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
     historyBody.innerHTML = '<tr><td colspan="4">Loading...</td></tr>';
     document.getElementById('pending-picks-week').textContent = defaultWeek;
@@ -298,7 +334,6 @@ async function displayDashboard() {
         if (pendingPicksRes.error) throw pendingPicksRes.error;
         if (pastPicksRes.error) throw pastPicksRes.error;
         
-        // Render Pending Picks
         pendingBody.innerHTML = '';
         const pendingPicksForWeek = pendingPicksRes.data?.filter(p => p.week === defaultWeek) || [];
         if (pendingPicksForWeek.length > 0) {
@@ -306,11 +341,9 @@ async function displayDashboard() {
                 const game = allGames.find(g => g['Game Id'] == pick.game_id);
                 const doubleUp = pick.is_double_up ? ' 🔥' : '';
                 
-                if (game) { // Check if game data was found
+                if (game) {
                     const gameNameText = `${game['Away Display Name']} @ ${game['Home Display Name']}`;
-                    const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] 
-                        ? game['Home Logo'] 
-                        : game['Away Logo'];
+                    const pickedTeamLogoUrl = teamData[pick.picked_team] || '';
 
                     pendingBody.innerHTML += `
                         <tr>
@@ -336,7 +369,6 @@ async function displayDashboard() {
             pendingBody.innerHTML = `<tr><td colspan="3">No pending picks for ${defaultWeek}.</td></tr>`;
         }
 
-        // Render Pick History
         historyBody.innerHTML = '';
         if (pastPicksRes.data?.length > 0) {
             pastPicksRes.data.forEach(pick => {
@@ -347,31 +379,29 @@ async function displayDashboard() {
                 if (pick.is_double_up) points *= 2;
                 const pointsText = points > 0 ? `+${points}` : points;
 
-                if (game) { // Check if game data was found
+                if (game) {
                     const gameNameText = `${game['Away Display Name']} @ ${game['Home Display Name']} (${pick.week})`;
-                    const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] 
-                        ? game['Home Logo'] 
-                        : game['Away Logo'];
+                    const pickedTeamLogoUrl = teamData[pick.picked_team] || '';
                     
                     historyBody.innerHTML += `
                         <tr>
-                            <td>
-                                <span class="team-name-text">${gameNameText}</span>
-                                <div class="team-logo-display">
-                                    <img src="${game['Away Logo']}" alt="${game['Away Display Name']}" class="table-logo">
-                                    <span>@</span>
-                                    <img src="${game['Home Logo']}" alt="${game['Home Display Name']}" class="table-logo">
-                                </div>
-                            </td>
-                            <td>
-                                <span class="team-name-text">${pick.picked_team}</span>
-                                <div class="team-logo-display">
-                                    <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="table-logo">
-                                </div>
-                            </td>
-                            <td class="${resultClass}">${resultText}</td>
-                            <td>${pointsText}</td>
-                        </tr>`;
+            <td>
+                <span class="team-name-text">${gameNameText}</span>
+                <div class="team-logo-display">
+                    <img src="${game['Away Logo']}" alt="${game['Away Display Name']}" class="table-logo">
+                    <span>@</span>
+                    <img src="${game['Home Logo']}" alt="${game['Home Display Name']}" class="table-logo">
+                </div>
+            </td>
+            <td>
+                <span class="team-name-text">${pick.picked_team}</span>
+                <div class="team-logo-display">
+                    <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="table-logo">
+                </div>
+            </td>
+            <td class="${resultClass}">${resultText}</td>
+            <td>${pointsText}</td>
+        </tr>`;
                 }
             });
         } else {
@@ -384,7 +414,6 @@ async function displayDashboard() {
         historyBody.innerHTML = '<tr><td colspan="4">Could not load pick history due to an error.</td></tr>';
     }
 }
-
 // REPLACE the old checkAndDisplayPicksReminder function with this new version
 
 async function checkAndDisplayPicksReminder() {
@@ -505,11 +534,11 @@ async function loadScoreboardForMatch(matchId) {
 
         const selectedWeek = defaultWeek;
         document.getElementById('scoreboard-week-title').textContent = selectedWeek;
-        const { data: allCurrentPicks, error: currentPicksError } = await supabase
-            .from('picks')
-            .select('picked_team, wager, is_double_up, game_id, user_id')
-            .eq('match_id', matchId)
-            .eq('week', selectedWeek);
+     const { data: allCurrentPicks, error: currentPicksError } = await supabase
+    .from('picks')
+    .select('picked_team, wager, is_double_up, game_id, user_id, is_correct') // <--- is_correct has been added
+    .eq('match_id', matchId)
+    .eq('week', selectedWeek);
         
         if (currentPicksError) throw currentPicksError;
         
@@ -762,38 +791,48 @@ function renderRunSheet(members, allPicks, week) {
 
             if (hasKickedOff) {
                 if (pick) {
-                    const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] ? game['Home Logo'] : game['Away Logo'];
+                    const pickedTeamLogoUrl = teamData[pick.picked_team] || '';
                     const doubleUpEmoji = pick.is_double_up ? ' 🔥' : '';
                     let cellContent;
-                    let cellStyle = ''; // Will hold our inline style string
+                    let cellStyle = '';
+                    let points;
 
-                    const homeScoreNum = parseInt(homeScore, 10);
-                    const awayScoreNum = parseInt(awayScore, 10);
+                    const isGameFinal = pick.is_correct !== null;
 
-                    if (!isNaN(homeScoreNum) && !isNaN(awayScoreNum) && (homeScoreNum > 0 || awayScoreNum > 0)) {
-                        let winningTeam = 'TIE';
-                        if (homeScoreNum > awayScoreNum) winningTeam = game['Home Display Name'];
-                        if (awayScoreNum > homeScoreNum) winningTeam = game['Away Display Name'];
+                    if (isGameFinal) {
+                        points = pick.is_correct ? pick.wager : (pick.wager * -2);
+                    } else {
+                        const homeScoreNum = parseInt(homeScore, 10);
+                        const awayScoreNum = parseInt(awayScore, 10);
 
-                        let points = 0;
-                        if (pick.picked_team === winningTeam) points = pick.wager;
-                        else if (winningTeam !== 'TIE') points = pick.wager * -2;
-                        if (pick.is_double_up) points *= 2;
+                        if (!isNaN(homeScoreNum) && !isNaN(awayScoreNum) && (homeScoreNum > 0 || awayScoreNum > 0)) {
+                            let winningTeam = 'TIE';
+                            if (homeScoreNum > awayScoreNum) winningTeam = game['Home Display Name'];
+                            if (awayScoreNum > homeScoreNum) winningTeam = game['Away Display Name'];
+                            
+                            points = 0;
+                            if (pick.picked_team === winningTeam) points = pick.wager;
+                            else if (winningTeam !== 'TIE') points = pick.wager * -2;
+                        } else {
+                            points = undefined;
+                        }
+                    }
 
-                        // Use the helper to get our dynamic styles
+                    if (typeof points !== 'undefined' && pick.is_double_up) {
+                        points *= 2;
+                    }
+
+                    if (typeof points !== 'undefined') {
                         const styles = getDynamicStyles(points);
                         cellStyle = `style="background-color: ${styles.backgroundColor}; color: ${styles.color};"`;
-                        
                         const pointsText = points > 0 ? `+${points}` : points;
-                        
                         cellContent = `
                             <div class="pick-content-wrapper">
                                 <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="pick-logo" title="${pick.picked_team}">
                                 <span>${pointsText}${doubleUpEmoji}</span>
                             </div>`;
                     } else {
-                        // Fallback for games not yet started (0-0 score)
-                        cellStyle = `class="wager-${pick.wager}"`; // Use the old wager class for this
+                        cellStyle = `class="wager-${pick.wager}"`;
                         cellContent = `
                             <div class="pick-content-wrapper">
                                 <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="pick-logo" title="${pick.picked_team}">
@@ -815,7 +854,6 @@ function renderRunSheet(members, allPicks, week) {
 
     container.innerHTML = tableHtml;
 }
-
 
 
 async function displayMatchesPage() {
@@ -1095,11 +1133,7 @@ async function createMatch() {
     }
 }
 
-
-// =================================================================
-// INITIALIZATION & APP START
-// =================================================================
-async function init() {
+function setupEventListeners() {
     const hamburgerBtn = document.getElementById('hamburger-btn');
     const mainNav = document.getElementById('main-nav');
 
@@ -1107,10 +1141,10 @@ async function init() {
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
 
     hamburgerBtn.addEventListener('click', (e) => {
-    e.stopPropagation(); 
-    mainNav.classList.toggle('nav-open');
-    document.body.classList.toggle('nav-open-body'); // Add this line
-})
+        e.stopPropagation(); 
+        mainNav.classList.toggle('nav-open');
+        document.body.classList.toggle('nav-open-body');
+    });
 
     document.body.addEventListener('click', (e) => {
         if (e.target.matches('#logout-btn')) logoutUser();
@@ -1119,17 +1153,17 @@ async function init() {
 
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
-        e.preventDefault();
-        if (mainNav.classList.contains('nav-open')) {
+            e.preventDefault();
+            if (mainNav.classList.contains('nav-open')) {
+                mainNav.classList.remove('nav-open');
+                document.body.classList.remove('nav-open-body');
+            }
+            window.location.hash = navLink.getAttribute('href').substring(1);
+        } else if (mainNav.classList.contains('nav-open') && !e.target.closest('#main-nav') && !e.target.closest('#hamburger-btn')) {
             mainNav.classList.remove('nav-open');
             document.body.classList.remove('nav-open-body');
         }
-        window.location.hash = navLink.getAttribute('href').substring(1);
-    } else if (mainNav.classList.contains('nav-open') && !e.target.closest('#main-nav') && !e.target.closest('#hamburger-btn')) {
-        mainNav.classList.remove('nav-open');
-        document.body.classList.remove('nav-open-body');
-    }
-});
+    });
 
     window.addEventListener('hashchange', () => {
         const pageId = (window.location.hash.substring(1) || 'home') + '-page';
@@ -1140,57 +1174,63 @@ async function init() {
         }
     });
 
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        currentUser = session?.user || null;
+        updateUserStatusUI();
+
+        try {
+            if (currentUser) {
+                await setupGlobalMatchSelector();
+                await checkAndDisplayPicksReminder();
+            } else {
+                document.getElementById('picks-reminder-banner').classList.add('hidden');
+            }
+        } catch (error) {
+            console.error("Error during auth state change setup:", error.message);
+        } finally {
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('hidden');
+            }
+
+            if (currentUser) {
+                if (!currentSelectedMatchId) {
+                    showPage('matches-page');
+                } else {
+                    const hash = window.location.hash.substring(1);
+                    const pageId = (hash || 'home') + '-page';
+                    showPage(document.getElementById(pageId) ? pageId : 'home-page');
+                }
+            } else {
+                showPage('auth-page');
+            }
+        }
+    });
+}
+
+// This is the NEW init function that runs when the page loads.
+async function init() {
     try {
         const response = await fetch(SHEET_URL);
         const csvText = await response.text();
         allGames = parseCSV(csvText);
         defaultWeek = determineDefaultWeek(allGames);
+
+        // This now happens right after the data is loaded, BEFORE anything else runs.
+        allGames.forEach(game => {
+            if (game['Home Display Name'] && game['Home Logo']) {
+                teamData[game['Home Display Name']] = game['Home Logo'];
+            }
+            if (game['Away Display Name'] && game['Away Logo']) {
+                teamData[game['Away Display Name']] = game['Away Logo'];
+            }
+        });
+
+        // Now that the data is ready, we can set up the rest of the app.
+        setupEventListeners();
+
     } catch (error) {
         console.error("CRITICAL: Failed to load game data.", error);
         document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
-        return;
     }
-    
-   supabase.auth.onAuthStateChange(async (event, session) => {
-    currentUser = session?.user || null;
-    updateUserStatusUI();
-
-    try {
-        if (currentUser) {
-            await setupGlobalMatchSelector(); // This function correctly sets currentSelectedMatchId
-            await checkAndDisplayPicksReminder();
-        } else {
-            // If there's no user, ensure banners are hidden
-            document.getElementById('picks-reminder-banner').classList.add('hidden');
-        }
-    } catch (error) {
-        console.error("Error during auth state change setup:", error.message);
-    } finally {
-        // --- This is where the updated routing logic lives ---
-
-        // Hide the loading screen first
-        const loadingOverlay = document.getElementById('loading-overlay');
-        if (loadingOverlay) {
-            loadingOverlay.classList.add('hidden');
-        }
-
-        if (currentUser) {
-            // *** NEW LOGIC BLOCK ***
-            // Check if the user is in any matches. currentSelectedMatchId will be null
-            // after setupGlobalMatchSelector() runs if they are in zero matches.
-            if (!currentSelectedMatchId) {
-                // If they are in zero matches, force redirect to the matches page.
-                showPage('matches-page');
-            } else {
-                // Otherwise, use the normal logic: go to the URL hash or default to home.
-                const hash = window.location.hash.substring(1);
-                const pageId = (hash || 'home') + '-page';
-                showPage(document.getElementById(pageId) ? pageId : 'home-page');
-            }
-        } else {
-            // If not logged in, show the auth page.
-            showPage('auth-page');
-        }
-    }
-});
 }
