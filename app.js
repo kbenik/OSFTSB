@@ -665,29 +665,59 @@ function renderScoreChart(chartData) {
 }
 
 function getDynamicStyles(points) {
+    // Clamp the points to the specified range [-20, 10]
     const clampedPoints = Math.max(-20, Math.min(10, points));
-    let backgroundColor, color = '#333'; // logoFilter is gone
 
-    if (clampedPoints >= 0) {
-        const percentage = clampedPoints / 10;
+    let backgroundColor, color = '#333'; // Default to dark text
+
+    if (clampedPoints > 5) {
+        // PHASE 1 (Excellent): Range from +6 (light green) to +10 (dark green)
+        // This is a 5-point range (6, 7, 8, 9, 10)
+        const percentage = (clampedPoints - 5) / 5; // 0.2 for +6, 1.0 for +10
+        
+        // We map this to a lightness scale from a light green (80%) down to a dark green (30%)
+        const lightness = 80 - (percentage * 50);
+        backgroundColor = `hsl(120, 50%, ${lightness}%)`; // Hue 120 is green, 50% saturation
+
+        // Switch to white text when the green gets dark
+        if (lightness < 55) {
+            color = 'white';
+        }
+
+    } else if (clampedPoints >= 0) {
+        // PHASE 2 (Good): Range from +5 (white) down to 0 (light grey)
+        // This is a 6-point range (0, 1, 2, 3, 4, 5)
+        const percentage = clampedPoints / 5; // 1.0 for +5, 0.0 for 0
+        
+        // We map this to a lightness scale from 90% (light grey) up to 100% (pure white)
         const lightness = 90 + (percentage * 10);
-        backgroundColor = `hsl(0, 0%, ${lightness}%)`;
+        backgroundColor = `hsl(0, 0%, ${lightness}%)`; // Grayscale
+
     } else if (clampedPoints >= -10) {
-        const percentage = Math.abs(clampedPoints / 10);
+        // PHASE 3 (Bad): Range from 0 (light grey) down to -10 (black)
+        // This is a 10-point range
+        const percentage = Math.abs(clampedPoints / 10); // 0.0 at 0, 1.0 at -10
+        
+        // We map this from our light grey (90%) down to pure black (0%)
         const lightness = 90 - (percentage * 90);
-        backgroundColor = `hsl(0, 0%, ${lightness}%)`;
+        backgroundColor = `hsl(0, 0%, ${lightness}%)`; // Grayscale
+
         if (lightness < 50) {
-            color = 'white'; // Still change text color
+            color = 'white';
         }
     } else {
-        const percentage = (Math.abs(clampedPoints) - 10) / 10;
+        // PHASE 4 (Catastrophic): Range from -10 (black) down to -20 (deep red)
+        // This is a 10-point range
+        const percentage = (Math.abs(clampedPoints) - 10) / 10; // 0.0 at -10, 1.0 at -20
+        
+        // Transition from black to red by "fading in" saturation and a bit of lightness
         const saturation = percentage * 100;
         const lightness = percentage * 25;
-        backgroundColor = `hsl(0, ${saturation}%, ${lightness}%)`;
-        color = 'white'; // Text is always white here
+        backgroundColor = `hsl(0, ${saturation}%, ${lightness}%)`; // Hue 0 is red
+        color = 'white';
     }
 
-    return { backgroundColor, color }; // Return only what's needed
+    return { backgroundColor, color };
 }
 
 function renderRunSheet(members, allPicks, week) {
