@@ -221,7 +221,7 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
+    gap: 0px;
 }
 
 .pick-logo {
@@ -425,4 +425,18 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     padding: 10px;
     border-radius: 5px;
     border-left: 4px solid var(--accent-color);
+}
+
+.run-sheet-table thead th:first-child,
+.run-sheet-table tbody td:first-child {
+    position: -webkit-sticky; /* For Safari compatibility */
+    position: sticky;
+    left: 0; /* Stick to the left edge */
+    z-index: 1; /* Ensure it stays on top of other cells when scrolling */
+}
+
+/* We need to re-apply the background color to the sticky data cell
+   so the scrolling content doesn't show through it. */
+.run-sheet-table tbody td:first-child {
+    background-color: #f9f9f9;
 }
