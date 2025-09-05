@@ -664,6 +664,32 @@ function renderScoreChart(chartData) {
     });
 }
 
+function getDynamicStyles(points) {
+    const clampedPoints = Math.max(-20, Math.min(10, points));
+    let backgroundColor, color = '#333'; // logoFilter is gone
+
+    if (clampedPoints >= 0) {
+        const percentage = clampedPoints / 10;
+        const lightness = 90 + (percentage * 10);
+        backgroundColor = `hsl(0, 0%, ${lightness}%)`;
+    } else if (clampedPoints >= -10) {
+        const percentage = Math.abs(clampedPoints / 10);
+        const lightness = 90 - (percentage * 90);
+        backgroundColor = `hsl(0, 0%, ${lightness}%)`;
+        if (lightness < 50) {
+            color = 'white'; // Still change text color
+        }
+    } else {
+        const percentage = (Math.abs(clampedPoints) - 10) / 10;
+        const saturation = percentage * 100;
+        const lightness = percentage * 25;
+        backgroundColor = `hsl(0, ${saturation}%, ${lightness}%)`;
+        color = 'white'; // Text is always white here
+    }
+
+    return { backgroundColor, color }; // Return only what's needed
+}
+
 function renderRunSheet(members, allPicks, week) {
     const container = document.getElementById('run-sheet-container');
     const weeklyGames = allGames.filter(g => g.Week === week).sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
@@ -682,7 +708,6 @@ function renderRunSheet(members, allPicks, week) {
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
         const hasKickedOff = kickoff < now;
-        const isFinal = game.Status === 'post';
         const showScore = game.Status !== 'pre';
         const awayScore = showScore ? game['Away Score'] : '-';
         const homeScore = showScore ? game['Home Score'] : '-';
@@ -694,44 +719,62 @@ function renderRunSheet(members, allPicks, week) {
             <td class="game-matchup-cell">
                 <div class="matchup-team-container ${isAwayFavored ? 'favored-team' : ''}">
                     <img src="${game['Away Logo']}" alt="${game['Away']}" class="team-logo">
-                    <div class="team-info-wrapper">
-                         <span class="team-score">${awayScore}</span>
-                    </div>
+                    <div class="team-info-wrapper"><span class="team-score">${awayScore}</span></div>
                 </div>
                 <div class="matchup-team-container ${isHomeFavored ? 'favored-team' : ''}">
                     <img src="${game['Home Logo']}" alt="${game['Home']}" class="team-logo">
-                     <div class="team-info-wrapper">
-                         <span class="team-score">${homeScore}</span>
-                    </div>
+                     <div class="team-info-wrapper"><span class="team-score">${homeScore}</span></div>
                 </div>
             </td>`;
         
         sortedMembers.forEach(member => {
             const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
 
-            // *** CHANGE #1: The logic is now split. First, we check if the game has kicked off. ***
             if (hasKickedOff) {
-                // If it has, we then check if the user actually made a pick.
                 if (pick) {
-                    const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] 
-                        ? game['Home Logo'] 
-                        : game['Away Logo'];
+                    const pickedTeamLogoUrl = pick.picked_team === game['Home Display Name'] ? game['Home Logo'] : game['Away Logo'];
                     const doubleUpEmoji = pick.is_double_up ? ' 🔥' : '';
-                    
-                    // *** CHANGE #2: The hyphen has been removed from the span below. ***
-                    const cellContent = `
-                        <div class="pick-content-wrapper">
-                            <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="pick-logo" title="${pick.picked_team}">
-                            <span>${pick.wager}${doubleUpEmoji}</span>
-                        </div>
-                    `;
-                    tableHtml += `<td class="pick-cell wager-${pick.wager}">${cellContent}</td>`;
+                    let cellContent;
+                    let cellStyle = ''; // Will hold our inline style string
+
+                    const homeScoreNum = parseInt(homeScore, 10);
+                    const awayScoreNum = parseInt(awayScore, 10);
+
+                    if (!isNaN(homeScoreNum) && !isNaN(awayScoreNum) && (homeScoreNum > 0 || awayScoreNum > 0)) {
+                        let winningTeam = 'TIE';
+                        if (homeScoreNum > awayScoreNum) winningTeam = game['Home Display Name'];
+                        if (awayScoreNum > homeScoreNum) winningTeam = game['Away Display Name'];
+
+                        let points = 0;
+                        if (pick.picked_team === winningTeam) points = pick.wager;
+                        else if (winningTeam !== 'TIE') points = pick.wager * -2;
+                        if (pick.is_double_up) points *= 2;
+
+                        // Use the helper to get our dynamic styles
+                        const styles = getDynamicStyles(points);
+                        cellStyle = `style="background-color: ${styles.backgroundColor}; color: ${styles.color};"`;
+                        
+                        const pointsText = points > 0 ? `+${points}` : points;
+                        
+                        cellContent = `
+                            <div class="pick-content-wrapper">
+                                <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="pick-logo" title="${pick.picked_team}">
+                                <span>${pointsText}${doubleUpEmoji}</span>
+                            </div>`;
+                    } else {
+                        // Fallback for games not yet started (0-0 score)
+                        cellStyle = `class="wager-${pick.wager}"`; // Use the old wager class for this
+                        cellContent = `
+                            <div class="pick-content-wrapper">
+                                <img src="${pickedTeamLogoUrl}" alt="${pick.picked_team}" class="pick-logo" title="${pick.picked_team}">
+                                <span>${pick.wager}${doubleUpEmoji}</span>
+                            </div>`;
+                    }
+                    tableHtml += `<td ${cellStyle}>${cellContent}</td>`;
                 } else {
-                    // If the game started but the user made no pick, render an empty cell.
                     tableHtml += `<td></td>`;
                 }
             } else {
-                // If the game has NOT kicked off yet, show the lock icon.
                 tableHtml += `<td class="locked-pick"><i>🔒</i></td>`;
             }
         });
