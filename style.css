@@ -117,79 +117,28 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 .scoreboard-user-picks li span:first-child { font-weight: 500; }
 .scoreboard-user-picks li .wager-indicator { font-weight: bold; color: var(--primary-color); }
 
-/* =================================================================
-   *** UPDATED: RESPONSIVE STYLES (for Mobile) ***
-   ================================================================= */
-@media (max-width: 768px) {
-    .container { padding: 10px; }
-    h1 { font-size: 1.5rem; }
-
-    /* --- UPDATED Header & Navigation --- */
-    .nav-container {
-        flex-wrap: wrap; /* Allow items to wrap if needed */
-    }
-    .nav-left { flex-direction: column; align-items: flex-start; gap: 5px; }
-    #logo { padding: 0; }
-    #user-status {
-        order: 3; /* Change flex order */
-    }
-    .hamburger {
-        display: flex; /* Show hamburger on mobile */
-        order: 2; /* Change flex order */
-    }
-
-    
-   #main-nav {
-        display: none; /* Hide nav by default on mobile */
-        order: 4; /* Ensure it appears last in the flex order */
-        position: absolute;
-        top: 100%; /* Position below the header */
-        left: 0;
-        right: 0; /* Make it full width */
-        width: 100%;
-        background-color: var(--primary-color);
-        box-shadow: var(--box-shadow);
-        z-index: 1000; /* Ensure it's on top */
-    }
-    #main-nav.nav-open { display: block; } /* Show when toggled */
-    #main-nav ul { flex-direction: column; width: 100%; }
-    #main-nav li { width: 100%; text-align: left; }
-    #main-nav .nav-link { display: block; padding: 15px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
-    #main-nav .nav-link:hover { background-color: var(--secondary-color); }
-
-    /* Other Mobile Adjustments */
-    .auth-form-container { flex-direction: column; }
-    .team img { width: 45px; height: 45px; }
-    .team-name { font-size: 0.9rem; }
-    .wager-controls { flex-direction: column; gap: 15px; }
-    .pick-history-table { font-size: 0.9rem; }
-    .pick-history-table th, .pick-history-table td { padding: 8px 5px; }
-    .pick-history-table .team-name-text {
-        display: none; /* Hide text on mobile */
-    }
-
-    .pick-history-table .team-logo-display {
-        display: flex; /* Show logos on mobile */
-    }
-}
-/* Scoreboard Chart Styles */
+/* --- Scoreboard Chart Styles --- */
 .chart-container {
     position: relative;
-    height: 300px; /* Adjust height as needed */
+    height: 300px;
     width: 100%;
 }
 
-/* Run Sheet Table Styles */
+/* =================================================================
+   *** MODIFIED: RUN SHEET TABLE STYLES ***
+   ================================================================= */
+
+/* Container enables horizontal scrolling on small screens */
 .run-sheet-container {
     width: 100%;
-    overflow-x: auto; /* Allows horizontal scrolling on small screens */
+    overflow-x: auto; 
 }
 
 .run-sheet-table {
     --run-sheet-logo-size: 24px;
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed; /* Helps with column width */
+    table-layout: fixed;
 }
 
 .run-sheet-table th,
@@ -197,9 +146,9 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     border: 1px solid #ddd;
     padding: 8px;
     text-align: center;
-    position: relative; /* Needed for the emoji overlay */
     font-size: 0.8rem;
     word-wrap: break-word;
+    min-width: 90px; /* NEW: Minimum width for player columns */
 }
 
 .run-sheet-table th {
@@ -207,16 +156,34 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     color: white;
     font-weight: 600;
     padding: 12px 8px;
-    /* Allows player names to rotate if needed, but not required */
-    /* white-space: nowrap; */
 }
 
-.run-sheet-table .pick-cell {
-    font-weight: bold;
-    /* The display:flex and other flex properties are now GONE from here */
+/* NEW: Sticky positioning for the first column (header and body) */
+.run-sheet-table thead th:first-child,
+.run-sheet-table tbody td:first-child {
+    position: -webkit-sticky; /* For Safari */
+    position: sticky;
+    left: 0;
+    z-index: 1; /* Ensures it stays above other cells during scroll */
 }
 
-/* 2. The NEW wrapper div now handles all the alignment. */
+/* MODIFIED: Set a fixed width and background for the sticky "Game" column header */
+.run-sheet-table th:first-child {
+    width: 50px; 
+    min-width: 50px;
+}
+
+/* MODIFIED: Set a fixed width and background for the sticky "Game" column cells */
+.run-sheet-table .game-matchup-cell {
+    text-align: left;
+    font-weight: 500;
+    background-color: #f9f9f9; /* Needs a solid background */
+    width: 150px;
+    min-width: 150px;
+    padding: 5px;
+    vertical-align: middle;
+}
+
 .pick-content-wrapper {
     display: flex;
     align-items: center;
@@ -225,17 +192,16 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 }
 
 .pick-logo {
-    width: var(--run-sheet-logo-size);  /* Use the variable */
-    height: var(--run-sheet-logo-size); /* Use the variable */
+    width: var(--run-sheet-logo-size);
+    height: var(--run-sheet-logo-size);
 }
 
 /* Wager Background Color Classes */
-.wager-1 { background-color: #f5f5f5; } /* very light grey */
-.wager-2 { background-color: #e0e0e0; } /* light grey */
-.wager-3 { background-color: #9e9e9e; } /* medium grey */
-.wager-4 { background-color: #616161; color: white; } /* dark grey, white text */
-.wager-5 { background-color: #212121; color: white; } /* very dark grey, white text */
-
+.wager-1 { background-color: #f5f5f5; }
+.wager-2 { background-color: #e0e0e0; }
+.wager-3 { background-color: #9e9e9e; }
+.wager-4 { background-color: #616161; color: white; }
+.wager-5 { background-color: #212121; color: white; }
 
 /* Locked Pick Style */
 .locked-pick {
@@ -246,53 +212,6 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     font-style: normal;
 }
 
-@media (max-width: 768px) {
-    .run-sheet-table th,
-    .run-sheet-table td {
-        font-size: 0.7rem;
-        padding: 6px 4px;
-    }
-    .run-sheet-table .game-matchup-cell {
-        width: 120px;
-    }
-    #global-selector-container {
-        order: 4; /* Place it in the flow on mobile */
-        width: 100%;
-        margin-top: 10px;
-        margin-right: 0;
-    }
-    #global-match-selector {
-        width: 100%;
-    }
-}
-/* Updated Run Sheet Cell for Matchups */
-.run-sheet-table .game-matchup-cell {
-    text-align: left;
-    font-weight: 500;
-    background-color: #f9f9f9;
-    width: 220px; /* Increased width to fit logos and scores */
-    padding: 5px;
-    vertical-align: middle;
-}
-
-/* Updated Run Sheet Table Styles */
-.run-sheet-table .game-matchup-cell {
-    text-align: left;
-    font-weight: 500;
-    background-color: #f9f9f9;
-    width: 150px; /* Adjusted width */
-    padding: 5px 8px;
-    vertical-align: middle;
-}
-
-.run-sheet-table .status-cell {
-    font-size: 0.8rem;
-    color: #555;
-    background-color: #f9f9f9;
-    width: 80px;
-    vertical-align: middle;
-}
-
 /* Flex container for each team's info (logo, name, score) */
 .matchup-team-container {
     display: flex;
@@ -301,40 +220,41 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 }
 
 .team-logo {
-    width: var(--run-sheet-logo-size);  /* Use the variable */
-    height: var(--run-sheet-logo-size); /* Use the variable */
+    width: var(--run-sheet-logo-size);
+    height: var(--run-sheet-logo-size);
     margin-right: 8px;
 }
 
 .team-info-wrapper {
     display: flex;
-    align-items: baseline; /* Aligns code and score nicely */
+    align-items: baseline;
     gap: 6px;
-}
-
-.team-code {
-    font-weight: bold;
-    font-size: 0.9rem;
 }
 
 .team-score {
     font-size: 0.85rem;
     color: #333;
 }
+.favored-team .team-logo {
+    box-shadow: 0 0 8px 1px var(--secondary-color);
+    border-radius: 15%;
+}
+
+/* --- Other Styles --- */
 .button-secondary {
     padding: 8px 16px;
-    background-color: #e0e0e0; /* A light grey */
-    color: #757575; /* A darker grey for text */
+    background-color: #e0e0e0;
+    color: #757575;
     border: none;
     border-radius: 5px;
     font-size: 1rem;
-    cursor: not-allowed; /* Show a "not allowed" cursor on hover */
+    cursor: not-allowed;
 }
 .page-controls-wrapper {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    flex-wrap: wrap; /* Allows wrapping on small screens */
+    flex-wrap: wrap;
     gap: 15px;
     margin-bottom: 20px;
 }
@@ -348,19 +268,7 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     margin-right: 15px;
 }
 
-#global-match-selector {
-    padding: 6px 10px;
-    border-radius: 5px;
-    border: 1px solid #fff;
-    background-color: var(--primary-color);
-    color: white;
-    font-size: 0.9rem;
-    font-weight: 500;
-}
-
-#global-match-selector:focus {
-    outline: 2px solid var(--accent-color);
-}
+#global-match-selector,
 #week-selector {
     padding: 8px 12px;
     border-radius: var(--border-radius);
@@ -369,74 +277,112 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     font-size: 1rem;
 }
 
-.run-sheet-table tbody td {
-    padding-top: 10px;
-    padding-bottom: 10px;
-    vertical-align: middle; /* Ensures content aligns nicely in all cells */
+#global-match-selector {
+    border: 1px solid #fff;
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 500;
+}
+#global-match-selector:focus {
+    outline: 2px solid var(--accent-color);
 }
 
-.favored-team .team-logo {
-    box-shadow: 0 0 8px 1px var(--secondary-color); /* Creates a yellow glow */
-    border-radius: 20%; /* Makes the glow circular */
-}
 .picks-reminder-banner {
-    background-color: var(--secondary-color); /* NFL Red */
+    background-color: var(--secondary-color);
     color: white;
-    padding: 0px 0;
+    padding: 0px;
     text-align: center;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     transition: all 0.3s ease-in-out;
+    border-bottom-left-radius: 15px;
+    border-bottom-right-radius: 15px;
 }
 
 .reminder-link-button {
     color: white;
-    text-decoration: none; /* Remove the underline */
+    text-decoration: none;
     font-weight: 600;
     font-size: 1rem;
-    display: block; /* Makes the entire area of the link clickable */
-    padding: 0px 0px;
-    border-radius: 5px;
+    display: block;
+    padding: 10px 15px;
     transition: background-color 0.2s ease-in-out;
 }
 
-/* Add a hover effect for better user feedback */
 .reminder-link-button:hover {
-    background-color: rgba(0, 0, 0, 0.15); /* Slightly darken the red background */
-}
-
-/* We still need the main banner style */
-.picks-reminder-banner {
-    background-color: var(--secondary-color); /* NFL Red */
-    color: white;
-    padding: 0px 0;
-    text-align: center;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    transition: all 0.3s ease-in-out;
-    border-bottom-left-radius: 15px; /* Adjust the value as needed */
-    border-bottom-right-radius: 15px;
+    background-color: rgba(0, 0, 0, 0.15);
 }
 
 .run-sheet-description {
-    margin-top: 0; /* Remove the default top margin */
-    margin-bottom: 1rem; /* Add a controlled amount of space below */
+    margin-top: 0;
+    margin-bottom: 1rem;
     font-size: 0.9rem;
     color: #666;
-    background-color: #fdf8e1; /* Optional: A light yellow background to make it stand out */
+    background-color: #fdf8e1;
     padding: 10px;
     border-radius: 5px;
     border-left: 4px solid var(--accent-color);
 }
 
-.run-sheet-table thead th:first-child,
-.run-sheet-table tbody td:first-child {
-    position: -webkit-sticky; /* For Safari compatibility */
-    position: sticky;
-    left: 0; /* Stick to the left edge */
-    z-index: 1; /* Ensure it stays on top of other cells when scrolling */
-}
 
-/* We need to re-apply the background color to the sticky data cell
-   so the scrolling content doesn't show through it. */
-.run-sheet-table tbody td:first-child {
-    background-color: #f9f9f9;
+/* =================================================================
+   *** RESPONSIVE STYLES (for Mobile) ***
+   ================================================================= */
+@media (max-width: 768px) {
+    .container { padding: 10px; }
+    h1 { font-size: 1.5rem; }
+
+    /* Header & Navigation */
+    .nav-container { flex-wrap: wrap; }
+    .nav-left { flex-direction: column; align-items: flex-start; gap: 5px; }
+    #logo { padding: 0; }
+    #user-status { order: 3; }
+    .hamburger { display: flex; order: 2; }
+    #main-nav {
+        display: none;
+        order: 4;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        width: 100%;
+        background-color: var(--primary-color);
+        box-shadow: var(--box-shadow);
+        z-index: 1000;
+    }
+    #main-nav.nav-open { display: block; }
+    #main-nav ul { flex-direction: column; width: 100%; }
+    #main-nav li { width: 100%; text-align: left; }
+    #main-nav .nav-link { display: block; padding: 15px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+    #main-nav .nav-link:hover { background-color: var(--secondary-color); }
+
+    /* Other Mobile Adjustments */
+    .auth-form-container { flex-direction: column; }
+    .team img { width: 45px; height: 45px; }
+    .team-name { font-size: 0.9rem; }
+    .wager-controls { flex-direction: column; gap: 15px; }
+    .pick-history-table { font-size: 0.9rem; }
+    .pick-history-table th, .pick-history-table td { padding: 8px 5px; }
+    .pick-history-table .team-name-text { display: none; }
+    .pick-history-table .team-logo-display { display: flex; }
+
+    /* Run Sheet mobile adjustments */
+    .run-sheet-table th,
+    .run-sheet-table td {
+        font-size: 0.7rem;
+        padding: 6px 4px;
+        min-width: 75px; /* MODIFIED: Smaller min-width for player columns on mobile */
+    }
+    .run-sheet-table .game-matchup-cell,
+    .run-sheet-table th:first-child {
+        width: 60px; /* MODIFIED: Slightly smaller fixed width for the game column on mobile */
+        min-width: 60px;
+    }
+
+    #global-selector-container {
+        order: 4;
+        width: 100%;
+        margin-top: 10px;
+        margin-right: 0;
+    }
+    #global-match-selector { width: 100%; }
 }
