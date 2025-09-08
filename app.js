@@ -495,19 +495,57 @@ async function checkAndDisplayPicksReminder() {
         banner.classList.add('hidden');
     }
 }
+
 async function displayScoreboardPage() {
+    // --- THIS IS THE ROBUST FIX ---
+    // First, find all the elements we need for this page to work.
     const runSheetContainer = document.getElementById('run-sheet-container');
-    
+    const chartView = document.getElementById('chart-view');
+    const tableView = document.getElementById('table-view');
+    const showChartBtn = document.getElementById('show-chart-btn');
+    const showTableBtn = document.getElementById('show-table-btn');
+
+    // **CRITICAL CHECK**: If any of these elements are missing, stop the function.
+    // This prevents the "Cannot read properties of null" error.
+    if (!runSheetContainer || !chartView || !tableView || !showChartBtn || !showTableBtn) {
+        console.error("Scoreboard HTML elements not found! Please ensure your index.html file has been updated with the new chart/table toggle structure.");
+        return; // Stop execution to prevent crashing.
+    }
+
+    // Now we know the elements exist, so we can safely proceed.
     if (scoreChartInstance) {
         scoreChartInstance.destroy();
         scoreChartInstance = null;
     }
     runSheetContainer.innerHTML = '';
+    
+    // Set the default view to be the chart
+    chartView.classList.remove('hidden');
+    tableView.classList.add('hidden');
+    showChartBtn.classList.add('active');
+    showTableBtn.classList.remove('active');
 
+    // Use .onclick to assign event handlers. This is simple and prevents duplicate listeners.
+    showChartBtn.onclick = () => {
+        chartView.classList.remove('hidden');
+        tableView.classList.add('hidden');
+        showChartBtn.classList.add('active');
+        showTableBtn.classList.remove('active');
+    };
+
+    showTableBtn.onclick = () => {
+        tableView.classList.remove('hidden');
+        chartView.classList.add('hidden');
+        showTableBtn.classList.add('active');
+        showChartBtn.classList.remove('active');
+    };
+
+    // Load scoreboard data as before
     if (currentSelectedMatchId) {
         loadScoreboardForMatch(currentSelectedMatchId);
     } else {
         runSheetContainer.innerHTML = '<p>Please join a match to see the scoreboard.</p>';
+        chartView.innerHTML = '<p>Please join a match to see standings.</p>';
     }
 }
 
@@ -529,16 +567,22 @@ async function loadScoreboardForMatch(matchId) {
 
         if (picksError) throw picksError;
 
-        const chartData = processWeeklyScores(members, allScoredPicks || []);
+        // *** THIS IS THE KEY CHANGE ***
+        // Process the scores once and get both chart and table data
+        const { chartData, tableData } = processWeeklyScores(members, allScoredPicks || []);
+
+        // Render both components with the processed data
         renderScoreChart(chartData);
+        renderPlayerScoresTable(tableData);
+        // *** END OF CHANGE ***
 
         const selectedWeek = defaultWeek;
         document.getElementById('scoreboard-week-title').textContent = selectedWeek;
-     const { data: allCurrentPicks, error: currentPicksError } = await supabase
-    .from('picks')
-    .select('picked_team, wager, is_double_up, game_id, user_id, is_correct') // <--- is_correct has been added
-    .eq('match_id', matchId)
-    .eq('week', selectedWeek);
+        const { data: allCurrentPicks, error: currentPicksError } = await supabase
+            .from('picks')
+            .select('picked_team, wager, is_double_up, game_id, user_id, is_correct')
+            .eq('match_id', matchId)
+            .eq('week', selectedWeek);
         
         if (currentPicksError) throw currentPicksError;
         
@@ -558,44 +602,60 @@ function processWeeklyScores(members, allPicks) {
         labels.push(`Week ${i}`);
     }
 
-    const playerScoresByWeek = new Map();
-    let latestCompletedWeek = 0; // Track the most recent week with scored games
+    const weeklyScoresMap = new Map(); // Stores points for each week { userId: [0, 5, -2, ...] }
+    const cumulativeScoresMap = new Map(); // Stores running total for chart { userId: [0, 5, 3, ...] }
+    let latestCompletedWeek = 0;
 
-    // Initialize scores for all players
+    // Initialize scores for all members
     members.forEach(member => {
-        playerScoresByWeek.set(member.profiles.id, Array(maxWeek + 1).fill(0));
+        const userId = member.profiles.id;
+        weeklyScoresMap.set(userId, Array(maxWeek + 1).fill(0));
+        cumulativeScoresMap.set(userId, Array(maxWeek + 1).fill(0));
     });
 
     // Calculate points for each week
     allPicks.forEach(pick => {
         const weekNum = parseInt(pick.week.split(' ')[1]);
         if (weekNum > 0 && weekNum <= maxWeek) {
-            // Update the latest completed week if this pick's week is higher
             if (weekNum > latestCompletedWeek) {
                 latestCompletedWeek = weekNum;
             }
             let points = pick.is_correct ? pick.wager : (pick.wager * -2);
-            if (pick.is_double_up) {
-                points *= 2;
-            }
-            const userScores = playerScoresByWeek.get(pick.user_id);
+            if (pick.is_double_up) points *= 2;
+            
+            const userScores = weeklyScoresMap.get(pick.user_id);
             if (userScores) {
-                userScores[weekNum] += points; // Add points for that specific week
+                userScores[weekNum] += points;
             }
         }
     });
 
-    // Calculate cumulative scores
-    playerScoresByWeek.forEach((scores, userId) => {
+    // Create the final player data array and calculate cumulative scores
+    const playerData = members.map(member => {
+        const userId = member.profiles.id;
+        const weeklyScores = weeklyScoresMap.get(userId);
+        const cumulativeScores = cumulativeScoresMap.get(userId);
+
         for (let i = 1; i <= maxWeek; i++) {
-            scores[i] = scores[i] + scores[i - 1]; // Cumulative sum
+            cumulativeScores[i] = cumulativeScores[i - 1] + weeklyScores[i];
         }
-        
-        // --- NEW: Set future weeks to null to create a gap in the line ---
+
+        // Set future weeks to null for the chart's visual gap
         for (let i = latestCompletedWeek + 1; i <= maxWeek; i++) {
-            scores[i] = null;
+            cumulativeScores[i] = null;
         }
+
+        return {
+            id: userId,
+            username: member.profiles.username,
+            weeklyScores: weeklyScores.slice(1), // Exclude "Start" week 0
+            runningTotal: cumulativeScores[latestCompletedWeek] || 0,
+            chartScores: cumulativeScores
+        };
     });
+    
+    // Sort players by running total for the table view
+    playerData.sort((a, b) => b.runningTotal - a.runningTotal);
     
     // WoW-inspired distinct colors
     const playerColors = [
@@ -614,26 +674,86 @@ function processWeeklyScores(members, allPicks) {
     let colorIndex = 0;
     members.forEach(member => {
         const color = playerColors[colorIndex % playerColors.length];
-        datasets.push({
-            label: member.profiles.username,
-            data: playerScoresByWeek.get(member.profiles.id),
-            borderColor: color,
-            backgroundColor: color.replace('1)', '0.1)'),
-            fill: false,
-            tension: 0.1,
-            pointRadius: 3,
-            spanGaps: false // This tells Chart.js to NOT draw a line over null data points
-        });
+        const data = playerData.find(p => p.id === member.profiles.id);
+        if (data) {
+            datasets.push({
+                label: member.profiles.username,
+                data: data.chartScores,
+                borderColor: color,
+                backgroundColor: color.replace('1)', '0.1)'),
+                fill: false,
+                tension: 0.1,
+                pointRadius: 3,
+                spanGaps: false
+            });
+        }
         colorIndex++;
     });
 
-    return { labels, datasets };
+    return {
+        chartData: { labels, datasets },
+        tableData: { playerData, latestCompletedWeek }
+    };
 }
-// *** ADD THIS NEW FUNCTION ***
+
+function renderPlayerScoresTable(tableData) {
+    const { playerData, latestCompletedWeek } = tableData;
+    const table = document.getElementById('player-scores-table');
+
+    // Handle case where there is no data or no weeks have been scored yet
+    if (!playerData || playerData.length === 0 || latestCompletedWeek < 1) {
+        table.innerHTML = '<thead><tr><th>Player</th><th>Total</th></tr></thead><tbody><tr><td colspan="2">No weekly scores to display yet.</td></tr></tbody>';
+        return;
+    }
+
+    // Set the headers in the desired order
+    const thisWeekHeader = `This Week (Wk ${latestCompletedWeek})`;
+    const lastWeekHeader = `Last Week`;
+
+    // --- THIS IS THE FIX ---
+    // Create the header row in the order: Player, Total, This Week, Last Week
+    let headerHtml = `
+        <thead>
+            <tr>
+                <th>Player</th>
+                <th class="total-score-col total-score-col-header">Total</th>
+                <th>${thisWeekHeader}</th>
+                <th>${lastWeekHeader}</th>
+            </tr>
+        </thead>
+    `;
+
+    // Create the body rows with the columns swapped
+    let bodyHtml = '<tbody>';
+    playerData.forEach(player => {
+        const currentWeekScore = player.weeklyScores[latestCompletedWeek - 1] || 0;
+        let lastWeekCellContent;
+
+        if (latestCompletedWeek === 1) {
+            lastWeekCellContent = ''; // Blank for Week 1
+        } else {
+            const lastWeekTotal = player.runningTotal - currentWeekScore;
+            lastWeekCellContent = lastWeekTotal;
+        }
+
+        // Render the data cells in the new order
+        bodyHtml += `
+            <tr>
+                <td>${player.username}</td>
+                <td class="total-score-col">${player.runningTotal}</td>
+                <td>${currentWeekScore}</td>
+                <td>${lastWeekCellContent}</td>
+            </tr>
+        `;
+    });
+    bodyHtml += '</tbody>';
+
+    table.innerHTML = headerHtml + bodyHtml;
+}
+
 function renderScoreChart(chartData) {
     const ctx = document.getElementById('score-chart').getContext('2d');
     
-    // --- NEW: Dynamic Scaling Logic ---
     let minScore = 0;
     let maxScore = 0;
     chartData.datasets.forEach(dataset => {
@@ -644,9 +764,8 @@ function renderScoreChart(chartData) {
         });
     });
 
-    // Set a default scale of -10 to 10, but allow it to expand if scores go beyond that
-    const suggestedMin = Math.min(-10, minScore - 5); // Add 5 points of padding
-    const suggestedMax = Math.max(10, maxScore + 5); // Add 5 points of padding
+    const suggestedMin = Math.min(-10, minScore - 5);
+    const suggestedMax = Math.max(10, maxScore + 5);
 
     if (scoreChartInstance) {
         scoreChartInstance.destroy();
@@ -666,6 +785,9 @@ function renderScoreChart(chartData) {
                 tooltip: {
                     mode: 'index',
                     intersect: false,
+                    // --- THIS IS THE NEW LINE ---
+                    itemSort: (a, b) => b.raw - a.raw, // Sorts tooltip items from highest to lowest score
+                    // --- END OF NEW LINE ---
                     callbacks: {
                         title: (tooltipItems) => tooltipItems[0].label,
                         label: (context) => `${context.dataset.label}: ${context.parsed.y.toFixed(0)}`
@@ -674,7 +796,6 @@ function renderScoreChart(chartData) {
             },
             scales: {
                 y: {
-                    // Apply the dynamic min/max values
                     min: suggestedMin,
                     max: suggestedMax,
                     ticks: { color: '#666' },
@@ -767,15 +888,46 @@ function renderRunSheet(members, allPicks, week) {
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
         const hasKickedOff = kickoff < now;
+        const isGameFinal = game.Status === 'post';
+        const isInProgress = hasKickedOff && !isGameFinal;
+
         const showScore = game.Status !== 'pre';
         const awayScore = showScore ? game['Away Score'] : '-';
         const homeScore = showScore ? game['Home Score'] : '-';
         const favoredTeam = game['Favored Team'];
         const isAwayFavored = favoredTeam === game['Away'];
         const isHomeFavored = favoredTeam === game['Home'];
+        
+        const rowClass = isInProgress ? 'game-row in-progress' : 'game-row';
 
-        tableHtml += `<tr>
+        // --- CORRECTED TOOLTIP LOGIC ---
+        // 1. Build the tooltip HTML only if the game is in progress.
+        let situationTooltipHtml = '';
+        if (isInProgress) {
+            let situationString = '';
+            // Handle specific states like Halftime first
+            if (game.Situation && (game.Situation.toLowerCase().includes('half'))) {
+                situationString = 'Halftime';
+            } 
+            // Handle regular in-game situations
+            else if (game.Qtr && game.Qtr !== '0') {
+                situationString = `Q${game.Qtr} - ${game.Clock}`;
+                if (game.Pos && game.Pos.trim()) {
+                    situationString += ` - ${game.Pos}`;
+                }
+                if (game.Situation && game.Situation.trim() && game.Situation !== 'waiting...') {
+                    situationString += ` ${game.Situation}`;
+                }
+            }
+            
+            const tooltipText = situationString.trim() || 'Game is Live';
+            situationTooltipHtml = `<span class="game-situation-tooltip">${tooltipText}</span>`;
+        }
+
+        // 2. Build the final cell HTML, ensuring the tooltip is added *in addition to* the team logos.
+        tableHtml += `<tr class="${rowClass}">
             <td class="game-matchup-cell">
+                ${situationTooltipHtml}
                 <div class="matchup-team-container ${isAwayFavored ? 'favored-team' : ''}">
                     <img src="${game['Away Logo']}" alt="${game['Away']}" class="team-logo">
                     <div class="team-info-wrapper"><span class="team-score">${awayScore}</span></div>
@@ -785,6 +937,7 @@ function renderRunSheet(members, allPicks, week) {
                      <div class="team-info-wrapper"><span class="team-score">${homeScore}</span></div>
                 </div>
             </td>`;
+        // --- END OF CORRECTION ---
         
         sortedMembers.forEach(member => {
             const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
@@ -796,8 +949,6 @@ function renderRunSheet(members, allPicks, week) {
                     let cellContent;
                     let cellStyle = '';
                     let points;
-
-                    const isGameFinal = pick.is_correct !== null;
 
                     if (isGameFinal) {
                         points = pick.is_correct ? pick.wager : (pick.wager * -2);
@@ -854,6 +1005,7 @@ function renderRunSheet(members, allPicks, week) {
 
     container.innerHTML = tableHtml;
 }
+
 
 
 async function displayMatchesPage() {
@@ -1137,20 +1289,27 @@ function setupEventListeners() {
     const hamburgerBtn = document.getElementById('hamburger-btn');
     const mainNav = document.getElementById('main-nav');
 
+    // Sets up the listeners for the sign-up and login forms
     setupAuthListeners();
+    
+    // Sets up the listener for the "Save Picks" button on the picks page
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
 
+    // Toggles the mobile navigation menu
     hamburgerBtn.addEventListener('click', (e) => {
         e.stopPropagation(); 
         mainNav.classList.toggle('nav-open');
         document.body.classList.toggle('nav-open-body');
     });
 
+    // Main click handler for the entire application
     document.body.addEventListener('click', (e) => {
+        // Handle specific button clicks
         if (e.target.matches('#logout-btn')) logoutUser();
         if (e.target.matches('.join-match-btn')) joinMatch(e.target.dataset.matchId);
         if (e.target.matches('#create-match-btn')) createMatch();
 
+        // Handle navigation link clicks
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
             e.preventDefault();
@@ -1160,11 +1319,13 @@ function setupEventListeners() {
             }
             window.location.hash = navLink.getAttribute('href').substring(1);
         } else if (mainNav.classList.contains('nav-open') && !e.target.closest('#main-nav') && !e.target.closest('#hamburger-btn')) {
+            // Close mobile nav if clicking outside of it
             mainNav.classList.remove('nav-open');
             document.body.classList.remove('nav-open-body');
         }
     });
 
+    // Handles routing when the URL hash changes
     window.addEventListener('hashchange', () => {
         const pageId = (window.location.hash.substring(1) || 'home') + '-page';
         if (currentUser) {
@@ -1174,6 +1335,7 @@ function setupEventListeners() {
         }
     });
 
+    // Handles Supabase authentication state changes (login, logout)
     supabase.auth.onAuthStateChange(async (event, session) => {
         currentUser = session?.user || null;
         updateUserStatusUI();
@@ -1207,6 +1369,7 @@ function setupEventListeners() {
         }
     });
 }
+
 
 // This is the NEW init function that runs when the page loads.
 async function init() {
