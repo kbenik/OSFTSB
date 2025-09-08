@@ -900,31 +900,37 @@ function renderRunSheet(members, allPicks, week) {
         
         const rowClass = isInProgress ? 'game-row in-progress' : 'game-row';
 
-        // --- CORRECTED TOOLTIP LOGIC ---
-        // 1. Build the tooltip HTML only if the game is in progress.
+        // --- REVISED AND CORRECTED TOOLTIP LOGIC ---
         let situationTooltipHtml = '';
         if (isInProgress) {
             let situationString = '';
-            // Handle specific states like Halftime first
-            if (game.Situation && (game.Situation.toLowerCase().includes('half'))) {
+            
+            // Handle special cases like Halftime
+            if (game.Situation && game.Situation.toLowerCase().includes('half')) {
                 situationString = 'Halftime';
             } 
-            // Handle regular in-game situations
+            // Build the full string for in-game plays
             else if (game.Qtr && game.Qtr !== '0') {
-                situationString = `Q${game.Qtr} - ${game.Clock}`;
+                let parts = [`Q${game.Qtr} - ${game.Clock}`];
+                
                 if (game.Pos && game.Pos.trim()) {
-                    situationString += ` - ${game.Pos}`;
+                    parts.push(game.Pos);
                 }
                 if (game.Situation && game.Situation.trim() && game.Situation !== 'waiting...') {
-                    situationString += ` ${game.Situation}`;
+                    parts.push(game.Situation);
+                }
+                // Join the parts with different separators for clarity
+                situationString = parts.slice(0, 2).join(' - '); // "Q3 - 12:48"
+                if (parts.length > 2) {
+                    situationString += ` - ${parts.slice(2).join(' ')}`; // " - BAL 2nd & 5..."
                 }
             }
             
             const tooltipText = situationString.trim() || 'Game is Live';
             situationTooltipHtml = `<span class="game-situation-tooltip">${tooltipText}</span>`;
         }
+        // --- END OF CORRECTION ---
 
-        // 2. Build the final cell HTML, ensuring the tooltip is added *in addition to* the team logos.
         tableHtml += `<tr class="${rowClass}">
             <td class="game-matchup-cell">
                 ${situationTooltipHtml}
@@ -937,8 +943,8 @@ function renderRunSheet(members, allPicks, week) {
                      <div class="team-info-wrapper"><span class="team-score">${homeScore}</span></div>
                 </div>
             </td>`;
-        // --- END OF CORRECTION ---
         
+        // ... The rest of the function remains the same ...
         sortedMembers.forEach(member => {
             const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
 
@@ -1005,7 +1011,6 @@ function renderRunSheet(members, allPicks, week) {
 
     container.innerHTML = tableHtml;
 }
-
 
 
 async function displayMatchesPage() {
@@ -1374,7 +1379,8 @@ function setupEventListeners() {
 // This is the NEW init function that runs when the page loads.
 async function init() {
     try {
-        const response = await fetch(SHEET_URL);
+        const cacheBustingUrl = `${SHEET_URL}&t=${new Date().getTime()}`;
+const response = await fetch(cacheBustingUrl);
         const csvText = await response.text();
         allGames = parseCSV(csvText);
         defaultWeek = determineDefaultWeek(allGames);
