@@ -177,11 +177,12 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 .run-sheet-table .game-matchup-cell {
     text-align: left;
     font-weight: 500;
-    background-color: #f9f9f9; /* Needs a solid background */
+    background-color: #f9f9f9;
     width: 150px;
     min-width: 150px;
     padding: 5px;
     vertical-align: middle;
+    position: relative; /* This line should already be here */
 }
 
 .pick-content-wrapper {
@@ -507,38 +508,40 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 }
 
 .game-situation-tooltip {
-    /* --- HIDE the tooltip by default --- */
+    /* Initially hidden */
     visibility: hidden;
     opacity: 0;
     
-    /* --- Appearance --- */
+    /* Appearance */
     background-color: #333;
     color: #fff;
-    text-align: center;
     border-radius: 6px;
     padding: 8px 12px;
     
-    /* --- Positioning Logic --- */
+    /* --- THIS IS THE CORRECTED POSITIONING LOGIC --- */
     position: absolute;
     z-index: 100;
-    bottom: 105%; /* Position it just above the cell */
-    left: 50%;
-    transform: translateX(-50%); /* Center it horizontally */
+    bottom: 105%; /* Position above the cell */
+    left: 0;       /* Align to the left edge of the cell, not the center */
     
-    /* --- Sizing and Text --- */
-    min-width: 220px;
+    /* Sizing and Text */
+    width: 260px;
+    white-space: normal;
+    text-align: left;
     font-size: 0.9rem;
-    white-space: nowrap; /* Keep the text on one line */
+    line-height: 1.4;
     
-    transition: opacity 0.2s; /* Add a smooth fade effect */
+    transition: opacity 0.2s;
 }
 
 /* This creates the little triangle arrow below the tooltip */
 .game-situation-tooltip::after {
     content: "";
     position: absolute;
-    top: 100%; /* Position the arrow at the bottom of the tooltip */
-    left: 50%;
+    top: 100%;
+    /* --- THIS IS THE FIX --- */
+    left: 30px; /* Changed from 50% to a fixed value from the left */
+    /* --- END OF FIX --- */
     margin-left: -5px;
     border-width: 5px;
     border-style: solid;
