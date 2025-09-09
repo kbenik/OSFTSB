@@ -42,6 +42,16 @@ header { background-color: var(--primary-color); color: white; padding: 0.5rem 0
 .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; background: none; border: none; padding: 5px; }
 .hamburger-line { width: 25px; height: 3px; background-color: white; border-radius: 3px; transition: transform 0.3s; }
 
+/* *** NEW: Style for avatar in the header *** */
+.header-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid white;
+    margin-right: -5px; /* Pull the username closer */
+}
+
 /* --- Main content and Card styles are unchanged --- */
 main { padding-top: 20px; position: relative; z-index: 5; transition: transform 0.3s ease-in-out;}
 .page { display: none; }
@@ -55,6 +65,54 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 .auth-form input { padding: 12px; margin-bottom: 15px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem; }
 .auth-form button { padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; font-size: 1.1rem; cursor: pointer; transition: background-color 0.3s; }
 .auth-form button:hover { background-color: var(--secondary-color); }
+
+/* --- *** NEW: Profile Form Styles *** --- */
+#profile-form {
+    display: flex;
+    flex-direction: column;
+}
+.profile-form-grid {
+    display: grid;
+    grid-template-columns: 100px 1fr; /* Avatar | Inputs */
+    gap: 20px;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.profile-avatar-section {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.avatar-preview {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid #eee;
+    background-color: #f9f9f9;
+}
+.profile-inputs-section {
+    display: flex;
+    flex-direction: column;
+}
+#profile-form label {
+    margin-bottom: 5px;
+    font-weight: 500;
+    color: #555;
+}
+#profile-form input {
+    padding: 10px;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    font-size: 1rem;
+}
+#save-profile-btn {
+    align-self: flex-end; /* Pushes button to the right */
+    width: auto;
+    padding: 10px 20px;
+}
+
 
 /* --- Home Page / Dashboard Styles are unchanged --- */
 .pick-history-table { width: 100%; border-collapse: collapse; }
@@ -386,18 +444,19 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
         margin-right: 0;
     }
     #global-match-selector { width: 100%; }
+
+    /* *** NEW: Profile form mobile adjustments *** */
+    .profile-form-grid {
+        grid-template-columns: 1fr; /* Stack avatar and inputs */
+        gap: 15px;
+    }
+    #save-profile-btn {
+        width: 100%;
+    }
 }
 /* In style.css, add these new styles. You can place them near your other scoreboard styles. */
 
-/* Flex container for the "Match Standings" title and the toggle buttons */
-.scoreboard-header-controls {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-    flex-wrap: wrap; /* Allows wrapping on smaller screens */
-    gap: 10px;
-}
+
 
 /* Styling for the new toggle button container */
 .view-toggle-buttons {
@@ -553,4 +612,69 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 .run-sheet-table .game-row.in-progress:hover .game-matchup-cell .game-situation-tooltip {
     visibility: visible;
     opacity: 1;
+}
+#run-sheet-week-selector {
+    padding: 6px 10px;
+    border-radius: var(--border-radius);
+    border: 1px solid #ccc;
+    background-color: white;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+.scoreboard-header-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px; /* Adds some space between title and selector */
+}
+
+/* This is the key change */
+.scoreboard-header-controls h2 {
+    flex-grow: 1; /* Pushes the selector to the right */
+    margin-bottom: 0; /* Removes default margin to help alignment */
+}
+canvas {
+    max-height: 350px;
+}
+
+.chart-container .chartjs-legend-item-pointstyle {
+    border-radius: 50%;
+    width: 20px !important;
+    height: 20px !important;
+    border: 2px solid #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+/* A wrapper to help align content in table cells */
+.player-cell, .player-header {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 8px; /* Adds space between avatar and name */
+    height: 100%;
+}
+
+/* Specifically for the main standings table */
+#player-scores-table .player-cell {
+    justify-content: flex-start; /* Aligns content to the left */
+}
+
+/* Styles for avatars in the "Standings" table */
+.table-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    background-color: #f0f0f0;
+}
+
+/* Styles for avatars in the "Live Scores" grid header */
+.run-sheet-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    background-color: #f0f0f0;
+    border: 2px solid rgba(255, 255, 255, 0.5); /* Adds a subtle border */
 }
