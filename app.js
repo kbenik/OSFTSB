@@ -5,9 +5,11 @@ const SUPABASE_URL = 'https://mtjflkwoxjnwaawjlaxy.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im10amZsa3dveGpud2Fhd2psYXh5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU3MDY1MzQsImV4cCI6MjA3MTI4MjUzNH0.PflqgxXG3kISTpp7nUNCXiBn-Ue3kvKNIS2yV1oz-jg';
 const supabase = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
+const TEAM_INFO_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=2118253087&single=true&output=csv';
 // --- STATE MANAGEMENT ---
 let allGames = [];
 let teamData = {};
+let teamInfo = {};
 let defaultWeek = '';
 let currentUser = null;
 let currentUserProfile = null; 
@@ -60,6 +62,60 @@ function parseCSV(csvText) {
             return game;
         })
         .filter(game => game !== null);
+    return dataRows;
+}
+
+function parseTeamInfoCSV(csvText) {
+    const lines = csvText.trim().replace(/\r\n/g, '\n').split('\n');
+    if (lines.length < 2) return [];
+
+    const dataRows = [];
+
+    // Start from the second line (index 1) to skip the headers.
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+
+        // Skip any empty lines or the initial instruction row.
+        if (!line || line.trim() === '' || line.startsWith('"Please provide')) {
+            continue;
+        }
+
+        try {
+            // Find the first two commas. The Team Name is between them.
+            const firstCommaIndex = line.indexOf(',');
+            const secondCommaIndex = line.indexOf(',', firstCommaIndex + 1);
+
+            // If a row doesn't have at least two commas, we can't process it.
+            if (firstCommaIndex === -1 || secondCommaIndex === -1) {
+                console.warn('Skipping malformed team info row:', line);
+                continue;
+            }
+
+            // Extract the team name from between the commas.
+            const teamName = line.substring(firstCommaIndex + 1, secondCommaIndex).trim();
+
+            // The summary is EVERYTHING after the second comma.
+            let summary = line.substring(secondCommaIndex + 1).trim();
+
+            // Clean up the summary: remove surrounding quotes and fix escaped quotes.
+            if (summary.startsWith('"') && summary.endsWith('"')) {
+                summary = summary.substring(1, summary.length - 1);
+            }
+            summary = summary.replace(/""/g, '"');
+
+            // Only add the row if we successfully found a team name.
+            if (teamName) {
+                dataRows.push({
+                    'TeamName': teamName,
+                    'AISummary': summary
+                });
+            }
+        } catch (e) {
+            // This is a safety net to prevent any unexpected error from crashing the app.
+            console.error('An unexpected error occurred parsing a team info row:', line, e);
+        }
+    }
+
     return dataRows;
 }
 
@@ -236,7 +292,7 @@ async function renderGamesForWeek(week, matchId) {
         saveButton.style.display = 'none';
         return;
     }
-    gamesContainer.innerHTML = ''; 
+    gamesContainer.innerHTML = '';
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
         const kickoff = getKickoffTimeAsDate(game);
@@ -246,10 +302,24 @@ async function renderGamesForWeek(week, matchId) {
         gameCard.dataset.gameId = gameId;
         const displayTime = kickoff.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         const oddsText = game.Odds ? ` | <span class="odds-info">${game.Odds}</span>` : '';
+        
+        // *** THIS IS THE CORRECTED HTML STRUCTURE ***
         gameCard.innerHTML = `
-            <div class="team" data-team-name="${game['Away Display Name']}"><img src="${game['Away Logo']}" alt="${game['Away Display Name']}"><span class="team-name">${game['Away Display Name']}</span></div>
+            <div class="team-container away-team-container">
+                <div class="team" data-team-name="${game['Away Display Name']}">
+                    <img src="${game['Away Logo']}" alt="${game['Away Display Name']}">
+                    <span class="team-name">${game['Away Display Name']}</span>
+                </div>
+                <div class="info-tab" data-team-name="${game['Away Display Name']}">&#9432;</div>
+            </div>
             <div class="game-separator">@</div>
-            <div class="team" data-team-name="${game['Home Display Name']}"><img src="${game['Home Logo']}" alt="${game['Home Display Name']}"><span class="team-name">${game['Home Display Name']}</span></div>
+            <div class="team-container home-team-container">
+                <div class="team" data-team-name="${game['Home Display Name']}">
+                    <img src="${game['Home Logo']}" alt="${game['Home Display Name']}">
+                    <span class="team-name">${game['Home Display Name']}</span>
+                </div>
+                <div class="info-tab" data-team-name="${game['Home Display Name']}">&#9432;</div>
+            </div>
             <div class="game-info">${displayTime}${oddsText}</div>
             <div class="wager-controls">
                 <div class="wager-options">
@@ -702,36 +772,37 @@ function renderPlayerScoresTable(tableData, currentWeek) {
 
     table.innerHTML = headerHtml + bodyHtml;
 }
+
 async function renderScoreChart(chartData) {
     const ctx = document.getElementById('score-chart').getContext('2d');
     
+    // Step 1: Pre-load the avatar images and set them as the default style for each dataset.
+    // This is the simplest and most reliable method.
     const imagePromises = chartData.datasets.map(dataset => {
         return new Promise((resolve) => {
+            // Default to a rectangle if no avatar is provided.
+            dataset.pointStyle = 'rect'; 
             if (!dataset.avatarUrl) {
-                dataset.pointStyle = 'rect';
                 return resolve();
             }
             const img = new Image();
-            
-            // *** THIS IS THE FIX ***
-            // Explicitly set the desired width and height for the icon.
             img.width = 20;
             img.height = 20;
-            // *** END OF FIX ***
-
             img.src = dataset.avatarUrl;
             img.onload = () => {
+                // If the image loads, make it the point style for this dataset.
                 dataset.pointStyle = img;
                 resolve();
             };
             img.onerror = () => {
-                dataset.pointStyle = 'rect';
+                // If the image fails, we've already defaulted to 'rect'.
                 resolve(); 
             };
         });
     });
     await Promise.all(imagePromises);
 
+    // This part remains the same
     let minScore = 0;
     let maxScore = 0;
     chartData.datasets.forEach(dataset => {
@@ -741,7 +812,6 @@ async function renderScoreChart(chartData) {
             if (point > maxScore) maxScore = point;
         });
     });
-
     const suggestedMin = Math.min(-10, minScore - 5);
     const suggestedMax = Math.max(10, maxScore + 5);
 
@@ -758,6 +828,7 @@ async function renderScoreChart(chartData) {
             plugins: {
                 legend: {
                     position: 'top',
+                    // The legend will now automatically use the correct pointStyle from the dataset.
                     labels: { 
                         usePointStyle: true,
                         boxWidth: 20,
@@ -778,9 +849,24 @@ async function renderScoreChart(chartData) {
             },
             elements: {
                 point: {
+                    // --- THIS IS THE CORRECTED LOGIC ---
                     radius: (context) => {
-                        const isLastPoint = context.dataIndex === context.dataset.data.findLastIndex(d => d !== null);
-                        return isLastPoint ? 5 : 3;
+                        const lastPointIndex = context.dataset.data.findLastIndex(d => d !== null);
+                        // Make the point larger ONLY if it's the last valid week.
+                        if (context.dataIndex === lastPointIndex && lastPointIndex > 0) {
+                            return 6;
+                        }
+                        return 3;
+                    },
+                    // This function now overrides the default point style when needed.
+                    pointStyle: (context) => {
+                        const lastPointIndex = context.dataset.data.findLastIndex(d => d !== null);
+                        // Show the default style (the avatar) ONLY if it's the last valid week.
+                        if (context.dataIndex === lastPointIndex && lastPointIndex > 0) {
+                            return context.dataset.pointStyle;
+                        }
+                        // For ALL other points (including "Start"), force it to be a rectangle.
+                        return 'rect';
                     }
                 }
             },
@@ -795,6 +881,7 @@ async function renderScoreChart(chartData) {
         }
     });
 }
+
 function getDynamicStyles(points) {
     const clampedPoints = Math.max(-20, Math.min(10, points));
     let backgroundColor, color = '#333';
@@ -1237,22 +1324,30 @@ function setupEventListeners() {
     setupAuthListeners();
     document.getElementById('save-picks-btn').addEventListener('click', savePicks);
     document.getElementById('profile-form').addEventListener('submit', handleProfileUpdate);
-
-    // *** NEW: Add listener for the avatar URL input to enable live preview ***
     document.getElementById('profile-avatar-url').addEventListener('input', (e) => {
         updateAvatarPreview(e.target.value);
     });
-
     hamburgerBtn.addEventListener('click', (e) => {
-        e.stopPropagation(); 
+        e.stopPropagation();
         mainNav.classList.toggle('nav-open');
         document.body.classList.toggle('nav-open-body');
     });
-
     document.body.addEventListener('click', (e) => {
         if (e.target.matches('#logout-btn')) logoutUser();
         if (e.target.matches('.join-match-btn')) joinMatch(e.target.dataset.matchId);
         if (e.target.matches('#create-match-btn')) createMatch();
+        if (e.target.classList.contains('info-tab')) {
+            // *** THIS IS THE FIX ***
+            e.stopPropagation(); // Prevents the click from selecting the team.
+            const teamName = e.target.dataset.teamName;
+            const info = teamInfo[teamName];
+            if (info) {
+                showInfoPopup(info.TeamName, info.AISummary);
+            }
+        }
+        if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close-btn')) {
+            hideInfoPopup();
+        }
         const navLink = e.target.closest('.nav-link');
         if (navLink) {
             e.preventDefault();
@@ -1266,7 +1361,6 @@ function setupEventListeners() {
             document.body.classList.remove('nav-open-body');
         }
     });
-
     window.addEventListener('hashchange', () => {
         const pageId = (window.location.hash.substring(1) || 'home') + '-page';
         if (currentUser) {
@@ -1275,57 +1369,98 @@ function setupEventListeners() {
             showPage('auth-page');
         }
     });
+}
 
-supabase.auth.onAuthStateChange(async (event, session) => {
-    const userJustSignedIn = currentUser === null && session?.user;
-    currentUser = session?.user || null;
-    currentUserProfile = null;
-    if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || userJustSignedIn) {
-        if (currentUser) {
-            const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
-            if (error) console.error("Could not fetch user profile:", error.message);
-            else currentUserProfile = profile;
-        }
-        updateUserStatusUI(currentUserProfile);
-        try {
+function startApp() {
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        const userJustSignedIn = currentUser === null && session?.user;
+        currentUser = session?.user || null;
+        currentUserProfile = null;
+
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || userJustSignedIn) {
             if (currentUser) {
-                await setupGlobalMatchSelector();
-                await checkAndDisplayPicksReminder();
-            } else {
-                document.getElementById('picks-reminder-banner').classList.add('hidden');
+                const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
+                if (error) console.error("Could not fetch user profile:", error.message);
+                else currentUserProfile = profile;
             }
-        } catch (error) {
-            console.error("Error during auth state change setup:", error.message);
-        } finally {
-            const loadingOverlay = document.getElementById('loading-overlay');
-            if (loadingOverlay) {
-                loadingOverlay.classList.add('hidden');
-            }
-            if (currentUser) {
-                if (!currentSelectedMatchId) {
-                    showPage('matches-page');
+            updateUserStatusUI(currentUserProfile);
+            try {
+                if (currentUser) {
+                    await setupGlobalMatchSelector();
+                    await checkAndDisplayPicksReminder();
                 } else {
-                    const hash = window.location.hash.substring(1);
-                    const pageId = (hash || 'home') + '-page';
-                    showPage(document.getElementById(pageId) ? pageId : 'home-page');
+                    document.getElementById('picks-reminder-banner').classList.add('hidden');
                 }
-            } else {
-                showPage('auth-page');
+            } catch (error) {
+                console.error("Error during auth state change setup:", error.message);
+            } finally {
+                const loadingOverlay = document.getElementById('loading-overlay');
+                if (loadingOverlay) {
+                    loadingOverlay.classList.add('hidden');
+                }
+                if (currentUser) {
+                    if (!currentSelectedMatchId) {
+                        showPage('matches-page');
+                    } else {
+                        const hash = window.location.hash.substring(1);
+                        const pageId = (hash || 'home') + '-page';
+                        showPage(document.getElementById(pageId) ? pageId : 'home-page');
+                    }
+                } else {
+                    showPage('auth-page');
+                }
             }
+        } else if (event === 'SIGNED_OUT') {
+            updateUserStatusUI(null);
+            showPage('auth-page');
         }
-    } else if (event === 'SIGNED_OUT') {
-        updateUserStatusUI(null);
-        showPage('auth-page');
+    });
+}
+
+function showInfoPopup(teamName, summary) {
+    let modal = document.getElementById('info-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'info-modal';
+        modal.className = 'modal-overlay hidden';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <button class="modal-close-btn">&times;</button>
+                <h3 id="modal-team-name"></h3>
+                <p id="modal-summary"></p>
+            </div>
+        `;
+        document.body.appendChild(modal);
     }
-});
+    document.getElementById('modal-team-name').textContent = teamName;
+    document.getElementById('modal-summary').textContent = summary;
+    modal.classList.remove('hidden');
+}
+
+function hideInfoPopup() {
+    const modal = document.getElementById('info-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
 }
 
 async function init() {
     try {
-        const cacheBustingUrl = `${SHEET_URL}&t=${new Date().getTime()}`;
-        const response = await fetch(cacheBustingUrl);
-        const csvText = await response.text();
-        allGames = parseCSV(csvText);
+        const [gameResponse, infoResponse] = await Promise.all([
+            fetch(`${SHEET_URL}&t=${new Date().getTime()}`),
+            fetch(`${TEAM_INFO_URL}&t=${new Date().getTime()}`)
+        ]);
+
+        const gameCsvText = await gameResponse.text();
+        const infoCsvText = await infoResponse.text();
+        
+        // --- THIS IS THE FIX ---
+        // Use the original parseCSV for the game data.
+        allGames = parseCSV(gameCsvText); 
+        // Use the new, separate parser for the team info data.
+        const allInfo = parseTeamInfoCSV(infoCsvText); 
+
+        allInfo.forEach(info => { teamInfo[info.TeamName] = info; });
         defaultWeek = determineDefaultWeek(allGames);
         allGames.forEach(game => {
             if (game['Home Display Name'] && game['Home Logo']) {
@@ -1335,7 +1470,10 @@ async function init() {
                 teamData[game['Away Display Name']] = game['Away Logo'];
             }
         });
+
         setupEventListeners();
+        startApp();
+
     } catch (error) {
         console.error("CRITICAL: Failed to load game data.", error);
         document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
