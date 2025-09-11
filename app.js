@@ -15,7 +15,9 @@ let currentUser = null;
 let currentUserProfile = null; 
 let userPicks = {};
 let userWagers = {};
-let doubleUpPick = null;
+let doubleUpPick = null; // For single-double-up mode
+let userDoubleUps = new Set(); // For multiple-double-up mode
+let currentMatchSettings = {}; // To store the settings of the current match
 let initiallySavedPicks = new Set();
 let scoreChartInstance = null;
 let currentSelectedMatchId = null;
@@ -302,23 +304,26 @@ async function renderGamesForWeek(week, matchId) {
         gameCard.dataset.gameId = gameId;
         const displayTime = kickoff.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         const oddsText = game.Odds ? ` | <span class="odds-info">${game.Odds}</span>` : '';
-        
-        // *** THIS IS THE CORRECTED HTML STRUCTURE ***
+
+        // *** CONDITIONAL LOGIC FOR DOUBLE UP BUTTON ***
+        let doubleUpButtonHtml = '';
+        if (currentMatchSettings.allow_multiple_double_ups) {
+            // New Mode: A button for every game
+            doubleUpButtonHtml = `<button class="double-up-btn individual-double-up">2x Double Up</button>`;
+        } else {
+            // Old Mode: A single, shared button
+            doubleUpButtonHtml = `<button class="double-up-btn shared-double-up">2x Double Up</button>`;
+        }
+
         gameCard.innerHTML = `
             <div class="team-container away-team-container">
-                <div class="team" data-team-name="${game['Away Display Name']}">
-                    <img src="${game['Away Logo']}" alt="${game['Away Display Name']}">
-                    <span class="team-name">${game['Away Display Name']}</span>
-                </div>
-                <div class="info-tab" data-team-name="${game['Away Display Name']}">&#9432;</div>
+                 <div class="team" data-team-name="${game['Away Display Name']}"><img src="${game['Away Logo']}" alt="${game['Away Display Name']}"><span class="team-name">${game['Away Display Name']}</span></div>
+                 <div class="info-tab" data-team-name="${game['Away Display Name']}">&#9432;</div>
             </div>
             <div class="game-separator">@</div>
             <div class="team-container home-team-container">
-                <div class="team" data-team-name="${game['Home Display Name']}">
-                    <img src="${game['Home Logo']}" alt="${game['Home Display Name']}">
-                    <span class="team-name">${game['Home Display Name']}</span>
-                </div>
-                <div class="info-tab" data-team-name="${game['Home Display Name']}">&#9432;</div>
+                 <div class="team" data-team-name="${game['Home Display Name']}"><img src="${game['Home Logo']}" alt="${game['Home Display Name']}"><span class="team-name">${game['Home Display Name']}</span></div>
+                 <div class="info-tab" data-team-name="${game['Home Display Name']}">&#9432;</div>
             </div>
             <div class="game-info">${displayTime}${oddsText}</div>
             <div class="wager-controls">
@@ -326,7 +331,7 @@ async function renderGamesForWeek(week, matchId) {
                     <span>Wager:</span>
                     ${[1, 2, 3, 4, 5].map(w => `<button class="wager-btn" data-value="${w}">${w}</button>`).join('')}
                 </div>
-                <button class="double-up-btn">2x Double Up</button>
+                ${doubleUpButtonHtml}
             </div>`;
         gamesContainer.appendChild(gameCard);
     });
@@ -342,21 +347,35 @@ async function loadAndApplyUserPicks(week, matchId) {
             .eq('user_id', currentUser.id)
             .eq('week', week)
             .eq('match_id', matchId);
+
         if (error) throw error;
         userPicks = {};
         userWagers = {};
         doubleUpPick = null;
+        userDoubleUps.clear(); // Clear the set for the new week
         initiallySavedPicks.clear();
+
         savedPicks.forEach(p => {
-            initiallySavedPicks.add(p.game_id.toString());
+            const gameIdStr = p.game_id.toString();
+            initiallySavedPicks.add(gameIdStr);
             userPicks[p.game_id] = p.picked_team;
             userWagers[p.game_id] = p.wager;
-            if (p.is_double_up) doubleUpPick = p.game_id.toString();
+
+            if (p.is_double_up) {
+                if (currentMatchSettings.allow_multiple_double_ups) {
+                    userDoubleUps.add(gameIdStr);
+                } else {
+                    doubleUpPick = gameIdStr;
+                }
+            }
+
             const card = document.querySelector(`.game-card[data-game-id="${p.game_id}"]`);
             if (card) {
                 card.querySelector(`.team[data-team-name="${p.picked_team}"]`)?.classList.add('selected');
                 card.querySelector(`.wager-btn[data-value="${p.wager}"]`)?.classList.add('selected');
-                if (p.is_double_up) card.querySelector('.double-up-btn').classList.add('selected');
+                if (p.is_double_up) {
+                    card.querySelector('.double-up-btn')?.classList.add('selected');
+                }
             }
         });
     } catch (err) {
@@ -1134,17 +1153,21 @@ async function handleProfileUpdate(e) {
 }
 
 function addGameCardEventListeners() {
-    const allDoubleUpBtns = document.querySelectorAll('.double-up-btn');
+    const allSharedDoubleUpBtns = document.querySelectorAll('.shared-double-up');
+
     document.querySelectorAll('.game-card').forEach(card => {
         if (card.classList.contains('locked')) return;
         const gameId = card.dataset.gameId;
+
         card.querySelectorAll('.team').forEach(team => {
             team.addEventListener('click', () => {
                 const teamName = team.dataset.teamName;
                 if (userPicks[gameId] === teamName) {
                     userPicks[gameId] = undefined;
                     userWagers[gameId] = undefined;
+                    // Also remove double up if team is deselected
                     if (doubleUpPick === gameId) doubleUpPick = null;
+                    userDoubleUps.delete(gameId);
                     card.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
                 } else {
                     userPicks[gameId] = teamName;
@@ -1153,6 +1176,7 @@ function addGameCardEventListeners() {
                 }
             });
         });
+
         card.querySelectorAll('.wager-btn').forEach(btn => {
             btn.addEventListener('click', () => {
                 if (!userPicks[gameId]) return alert("Please select a team before placing a wager.");
@@ -1161,17 +1185,53 @@ function addGameCardEventListeners() {
                 btn.classList.add('selected');
             });
         });
-        card.querySelector('.double-up-btn').addEventListener('click', (e) => {
-            if (!userPicks[gameId]) return alert("Please select a team before using your Double Up.");
-            const wasSelected = e.target.classList.contains('selected');
-            allDoubleUpBtns.forEach(b => b.classList.remove('selected'));
-            if (!wasSelected) {
-                e.target.classList.add('selected');
-                doubleUpPick = gameId;
-            } else {
-                doubleUpPick = null;
+
+        // This logic now correctly routes to single or max-2 mode
+        if (currentMatchSettings.allow_multiple_double_ups) {
+            const individualBtn = card.querySelector('.individual-double-up');
+            if (individualBtn) {
+                individualBtn.addEventListener('click', (e) => {
+                    if (!userPicks[gameId]) return alert("Please select a team before using Double Up.");
+                    
+                    const isSelected = e.target.classList.contains('selected');
+
+                    // *** THIS IS THE NEW LOGIC ***
+                    // If the user is trying to SELECT a new double up...
+                    if (!isSelected) {
+                        // ...check if they have already reached the cap of 2.
+                        if (userDoubleUps.size >= 2) {
+                            alert("You can only use a maximum of 2 Double Ups per week.");
+                            return; // Stop the function here
+                        }
+                    }
+                    // *** END OF NEW LOGIC ***
+
+                    // If the cap is not reached (or if they are deselecting), toggle as normal.
+                    e.target.classList.toggle('selected');
+                    if (e.target.classList.contains('selected')) {
+                        userDoubleUps.add(gameId);
+                    } else {
+                        userDoubleUps.delete(gameId);
+                    }
+                });
             }
-        });
+        } else {
+            // This is the original logic for single-double-up mode, which is unchanged.
+            const sharedBtn = card.querySelector('.shared-double-up');
+            if(sharedBtn) {
+                sharedBtn.addEventListener('click', (e) => {
+                    if (!userPicks[gameId]) return alert("Please select a team before using your Double Up.");
+                    const wasSelected = e.target.classList.contains('selected');
+                    allSharedDoubleUpBtns.forEach(b => b.classList.remove('selected'));
+                    if (!wasSelected) {
+                        e.target.classList.add('selected');
+                        doubleUpPick = gameId;
+                    } else {
+                        doubleUpPick = null;
+                    }
+                });
+            }
+        }
     });
 }
 
@@ -1192,15 +1252,27 @@ async function savePicks() {
                 throw new Error(`You must place a wager for the ${game['Away Display Name']} @ ${game['Home Display Name']} game.`);
             }
         }
-        const picksToUpsert = Object.keys(userPicks).filter(gameId => userPicks[gameId] !== undefined).map(gameId => ({
-            user_id: currentUser.id,
-            game_id: parseInt(gameId, 10),
-            match_id: currentSelectedMatchId,
-            picked_team: userPicks[gameId],
-            wager: userWagers[gameId],
-            is_double_up: gameId === doubleUpPick,
-            week: selectedWeek
-        }));
+
+        const picksToUpsert = Object.keys(userPicks).filter(gameId => userPicks[gameId] !== undefined).map(gameId => {
+            // *** CONDITIONAL LOGIC FOR SAVING DOUBLE UP ***
+            let isDouble = false;
+            if (currentMatchSettings.allow_multiple_double_ups) {
+                isDouble = userDoubleUps.has(gameId);
+            } else {
+                isDouble = gameId === doubleUpPick;
+            }
+
+            return {
+                user_id: currentUser.id,
+                game_id: parseInt(gameId, 10),
+                match_id: currentSelectedMatchId,
+                picked_team: userPicks[gameId],
+                wager: userWagers[gameId],
+                is_double_up: isDouble,
+                week: selectedWeek
+            };
+        });
+
         const picksToDelete = [...initiallySavedPicks].filter(gameId => !userPicks[gameId]);
         if (picksToUpsert.length > 0) {
             const { error } = await supabase.from('picks').upsert(picksToUpsert, { onConflict: 'user_id, game_id, match_id' });
@@ -1227,6 +1299,8 @@ async function setupGlobalMatchSelector() {
     const selector = document.getElementById('global-match-selector');
     selectorContainer.classList.add('hidden');
     currentSelectedMatchId = null;
+    currentMatchSettings = {}; // Reset settings
+
     if (!currentUser) {
         return;
     }
@@ -1234,32 +1308,42 @@ async function setupGlobalMatchSelector() {
         .from('match_members')
         .select('match_id')
         .eq('user_id', currentUser.id);
+
     if (membershipError || !memberships || memberships.length === 0) {
         currentSelectedMatchId = null;
         return;
     }
+
     const matchIds = memberships.map(m => m.match_id);
+    // *** MODIFIED QUERY: Fetch the new column ***
     const { data: userMatches, error: matchesError } = await supabase
         .from('matches')
-        .select('id, name')
+        .select('id, name, allow_multiple_double_ups') // <-- ADDED THE NEW COLUMN
         .in('id', matchIds);
+
     if (matchesError || !userMatches || userMatches.length === 0) {
         currentSelectedMatchId = null;
-    } 
-    else if (userMatches.length === 1) {
-        currentSelectedMatchId = userMatches[0].id;
-    } 
-    else {
-        selector.innerHTML = userMatches.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-        currentSelectedMatchId = selector.value;
-        selectorContainer.classList.remove('hidden');
-        selector.addEventListener('change', () => {
-            currentSelectedMatchId = selector.value;
-            const activePageId = document.querySelector('.page.active')?.id;
-            if (activePageId) {
-                showPage(activePageId);
-            }
-        });
+    } else {
+        const setMatch = (matchId) => {
+            currentSelectedMatchId = matchId;
+            currentMatchSettings = userMatches.find(m => m.id == matchId) || {};
+        };
+
+        if (userMatches.length === 1) {
+            setMatch(userMatches[0].id);
+        } else {
+            selector.innerHTML = userMatches.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
+            setMatch(selector.value); // Set initial match
+            selectorContainer.classList.remove('hidden');
+
+            selector.addEventListener('change', () => {
+                setMatch(selector.value); // Update on change
+                const activePageId = document.querySelector('.page.active')?.id;
+                if (activePageId) {
+                    showPage(activePageId);
+                }
+            });
+        }
     }
 }
 
