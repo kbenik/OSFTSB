@@ -28,7 +28,7 @@ let scoreChartInstance = null;
 let currentSelectedMatchId = null;
 
 // *** NEW: A reliable, built-in default avatar to prevent network errors ***
-const DEFAULT_AVATAR_URL = 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2VlZSI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAtNC40OCAxMC0xMFMxNy41MiAyIDEyIDJ6bTAgM2MxLjY2IDAgMyAxLjM0IDMgMyAwIDEuNjYtMS4zNCAzLTMgMy0xLjY2IDAtMy0xLjM0LTMtMyAwLTEuNjYgMS4zNC0zIDMtM3ptMCAxNC4yYy0yLjUgMC00LjcxLTEuMjgtNi0zLjIyLjAzLTEuOTkgNC0zLjA4IDYtMy4wOHM1Ljk3IDEuMDkgNiAzLjA4Yy0xLjI5IDEuOTQtMy41IDMuMjItNiAzLjIyeiIvPjwvc3ZnPg==';
+const DEFAULT_AVATAR_URL = 'https://mtjflkwoxjnwaawjlaxy.supabase.co/storage/v1/object/sign/Assets/ChatGPT%20Image%20Sep%2012,%202025,%2004_06_17%20PM.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zZTY3ZGM1Mi0xZGZiLTQ5ZGYtYmRjZC02Y2VlZWQwMWFkMTUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJBc3NldHMvQ2hhdEdQVCBJbWFnZSBTZXAgMTIsIDIwMjUsIDA0XzA2XzE3IFBNLnBuZyIsImlhdCI6MTc1NzcwNzU5MywiZXhwIjoxNzg5MjQzNTkzfQ.CWGJaiGmfGGmq7RACw3TAP7DI-gpx4I6EtYcXw1LznU';
 
 
 // =================================================================
@@ -194,7 +194,17 @@ function updateUserStatusUI(userProfile) {
             avatarImg = `<img src="${avatarUrl}" alt="User Avatar" class="header-avatar" onerror="this.src='${DEFAULT_AVATAR_URL}'">`;
         }
         
-        userStatusDiv.innerHTML = `${avatarImg}<span>Welcome, ${username}</span><button id="logout-btn">Logout</button>`;
+        // --- THIS IS THE FIX ---
+        // The avatar and username are now wrapped in a link to the #home page.
+        userStatusDiv.innerHTML = `
+            <a href="#home" class="user-profile-link nav-link">
+                ${avatarImg}
+                <span>Welcome, ${username}</span>
+            </a>
+            <button id="logout-btn">Logout</button>
+        `;
+        // --- END OF FIX ---
+
         mainNav.classList.remove('hidden');
         hamburgerBtn.classList.remove('hidden');
     } else {
@@ -207,6 +217,17 @@ function updateUserStatusUI(userProfile) {
 function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
     const activePage = document.getElementById(pageId);
+
+    // --- THIS IS THE FIX ---
+    // This logic shows or hides the button based on the current page.
+    const floatingSaveBtn = document.getElementById('floating-save-container');
+    if (pageId === 'picks-page') {
+        floatingSaveBtn.classList.remove('hidden');
+    } else {
+        floatingSaveBtn.classList.add('hidden');
+    }
+    // --- END OF FIX ---
+
     if (activePage) {
         activePage.classList.add('active');
         switch (pageId) {
