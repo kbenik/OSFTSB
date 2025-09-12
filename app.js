@@ -68,11 +68,9 @@ function parseCSV(csvText) {
 }
 
 function parseTeamInfoCSV(csvText) {
-    // This function has been rewritten to be more robust and handle the new column.
     const rawLines = csvText.trim().replace(/\r\n/g, '\n').split('\n');
     const lines = [];
     let currentLine = '';
-
     for (const rawLine of rawLines) {
         currentLine += rawLine;
         const quoteCount = (currentLine.match(/"/g) || []).length;
@@ -84,18 +82,16 @@ function parseTeamInfoCSV(csvText) {
         }
     }
     if (currentLine) lines.push(currentLine);
-
     if (lines.length < 2) return [];
 
-    // Define headers to map the CSV columns correctly.
-    const headers = ['Index', 'TeamName', 'AISummary', 'DepthChart'];
+    // --- THIS IS THE FIX: Added 'News' to the headers ---
+    const headers = ['Index', 'TeamName', 'AISummary', 'DepthChart', 'News'];
     const dataRows = [];
     const regex = /(?:"([^"]*)"|([^,]*))(?:,|$)/g;
 
     for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
         if (!line || line.trim() === '' || line.startsWith('"Please provide')) continue;
-
         const values = [];
         let match;
         regex.lastIndex = 0;
@@ -103,7 +99,6 @@ function parseTeamInfoCSV(csvText) {
             if (match.index === regex.lastIndex) regex.lastIndex++;
             values.push((match[1] || match[2] || '').trim());
         }
-
         const rowData = {};
         headers.forEach((header, index) => {
             let value = values[index] || '';
@@ -112,17 +107,20 @@ function parseTeamInfoCSV(csvText) {
             }
             rowData[header] = value.replace(/""/g, '"');
         });
-
         if (rowData.TeamName) {
             dataRows.push({
                 'TeamName': rowData.TeamName,
                 'AISummary': rowData.AISummary,
-                'DepthChart': rowData.DepthChart
+                'DepthChart': rowData.DepthChart,
+                'News': rowData.News // --- THIS IS THE FIX: Added 'News' data ---
             });
         }
     }
     return dataRows;
 }
+
+
+
 function getKickoffTimeAsDate(game) {
     if (!game || !game.Date || !game.Time) {
         return new Date('1970-01-01T00:00:00Z');
@@ -1448,7 +1446,7 @@ function setupEventListeners() {
             if (info) {
                 // --- THIS IS THE FIX ---
                 // The third argument (info.DepthChart) is now correctly passed to the function.
-                showInfoPopup(info.TeamName, info.AISummary, info.DepthChart);
+                showInfoPopup(info.TeamName, info.AISummary, info.DepthChart, info.News);
             }
         }
         if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close-btn')) {
@@ -1524,13 +1522,12 @@ function startApp() {
     });
 }
 
-function showInfoPopup(teamName, summary, depthChartUrl) {
+function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) { // --- THIS IS THE FIX: Added newsUrl ---
     let modal = document.getElementById('info-modal');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'info-modal';
         modal.className = 'modal-overlay hidden';
-        // The modal now includes a container for the link.
         modal.innerHTML = `
             <div class="modal-content">
                 <button class="modal-close-btn">&times;</button>
@@ -1543,19 +1540,22 @@ function showInfoPopup(teamName, summary, depthChartUrl) {
     }
     document.getElementById('modal-team-name').textContent = teamName;
     document.getElementById('modal-summary').textContent = summary;
-
-    // --- THIS IS THE NEW LOGIC ---
-    // It finds the link container and adds the button if a URL is present.
     const linkContainer = document.getElementById('modal-link-container');
+    
+    // --- THIS IS THE FIX: Build the HTML for both buttons ---
+    let linksHtml = '';
     if (depthChartUrl && depthChartUrl.trim() !== '') {
-        linkContainer.innerHTML = `<a href="${depthChartUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">Depth Chart</a>`;
-    } else {
-        linkContainer.innerHTML = ''; // Keep it empty if there's no link.
+        linksHtml += `<a href="${depthChartUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">Depth Chart</a>`;
     }
-    // --- END OF NEW LOGIC ---
-
+    if (newsUrl && newsUrl.trim() !== '') {
+        linksHtml += `<a href="${newsUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">News</a>`;
+    }
+    linkContainer.innerHTML = linksHtml;
+    
     modal.classList.remove('hidden');
 }
+
+
 
 function hideInfoPopup() {
     const modal = document.getElementById('info-modal');
