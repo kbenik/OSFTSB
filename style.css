@@ -733,3 +733,22 @@ canvas {
     /* Ensure text has room to breathe and doesn't get clipped */
     overflow-wrap: break-word;
 }
+#modal-link-container {
+    margin-top: 20px;
+    text-align: right; /* Aligns button to the right */
+}
+
+.modal-link-button {
+    display: inline-block;
+    padding: 10px 20px;
+    background-color: var(--primary-color);
+    color: white;
+    text-decoration: none;
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    transition: background-color 0.3s;
+}
+
+.modal-link-button:hover {
+    background-color: var(--secondary-color);
+}
