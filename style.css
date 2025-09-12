@@ -752,3 +752,10 @@ canvas {
 .modal-link-button:hover {
     background-color: var(--secondary-color);
 }
+
+#modal-link-container {
+    margin-top: 20px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px; /* Adds space between the buttons */
+}
