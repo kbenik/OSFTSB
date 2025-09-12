@@ -11,16 +11,16 @@
 <body>
 
    <header>
-    <!-- *** CORRECTED HEADER STRUCTURE *** -->
     <div class="container nav-container">
         <div class="nav-left">
-            <a href="#home" id="logo" class="nav-link">OSFTSB</a>
+            <!-- THIS IS THE FIX: The <a> tag is now a <div> -->
+            <div id="logo">OSFTSB</div>
         </div>
         <nav id="main-nav">
             <ul>
-                <li><a href="#home" class="nav-link">Dashboard</a></li>
+                <!-- THIS IS THE FIX: The href now points to #scoreboard -->
+                <li><a href="#scoreboard" class="nav-link">Dashboard</a></li>
                 <li><a href="#picks" class="nav-link">Picks</a></li>
-                <li><a href="#scoreboard" class="nav-link">Scoreboard</a></li>
                 <li><a href="#matches" class="nav-link">Matches</a></li>
                 <li><a href="#rules" class="nav-link">Rules</a></li>
             </ul>
@@ -68,42 +68,45 @@
 
         <!-- Home Page / Dashboard -->
         <section id="home-page" class="page">
-            <h1>Dashboard</h1>
+    
+    
+    <!-- Pending Picks is now first -->
+    <div class="card">
+        <h2>Pending Picks for <span id="pending-picks-week"></span></h2>
+        <table class="pick-history-table">
+            <thead><tr><th>Game</th><th>Your Pick</th><th>Wager</th></tr></thead>
+            <tbody id="pending-picks-body"></tbody>
+        </table>
+    </div>
+    
+    <!-- Pick History is second -->
+    <div class="card">
+        <h2>My Pick History</h2>
+        <table class="pick-history-table">
+            <thead><tr><th>Game</th><th>Your Pick</th><th>Result</th><th>Points</th></tr></thead>
+            <tbody id="pick-history-body"></tbody>
+        </table>
+    </div>
 
-            <!-- *** NEW PROFILE EDITING CARD *** -->
-            <div class="card">
-                <h2>My Profile</h2>
-                <form id="profile-form">
-                    <div class="profile-form-grid">
-                        <div class="profile-avatar-section">
-                            <img id="profile-avatar-preview" src="https://wallpapers.com/images/hd/placeholder-profile-icon-8qmjk1094ijhbem9.jpg" alt="Avatar Preview" class="avatar-preview">
-                        </div>
-                        <div class="profile-inputs-section">
-                            <label for="profile-username">Username</label>
-                            <input type="text" id="profile-username" placeholder="Your Username" required>
-                            <label for="profile-avatar-url">Team Icon URL</label>
-                            <input type="text" id="profile-avatar-url" placeholder="http://.../icon.png">
-                        </div>
-                    </div>
-                    <button type="submit" id="save-profile-btn" class="button-primary">Save Profile</button>
-                </form>
+    <!-- My Profile has been moved to the bottom -->
+    <div class="card">
+        <h2>My Profile</h2>
+        <form id="profile-form">
+            <div class="profile-form-grid">
+                <div class="profile-avatar-section">
+                    <img id="profile-avatar-preview" src="https://wallpapers.com/images/hd/placeholder-profile-icon-8qmjk1094ijhbem9.jpg" alt="Avatar Preview" class="avatar-preview">
+                </div>
+                <div class="profile-inputs-section">
+                    <label for="profile-username">Username</label>
+                    <input type="text" id="profile-username" placeholder="Your Username" required>
+                    <label for="profile-avatar-url">Team Icon URL</label>
+                    <input type="text" id="profile-avatar-url" placeholder="http://.../icon.png">
+                </div>
             </div>
-            
-            <div class="card">
-                <h2>Pending Picks for <span id="pending-picks-week"></span></h2>
-                <table class="pick-history-table">
-                    <thead><tr><th>Game</th><th>Your Pick</th><th>Wager</th></tr></thead>
-                    <tbody id="pending-picks-body"></tbody>
-                </table>
-            </div>
-            <div class="card">
-                <h2>My Pick History</h2>
-                <table class="pick-history-table">
-                    <thead><tr><th>Game</th><th>Your Pick</th><th>Result</th><th>Points</th></tr></thead>
-                    <tbody id="pick-history-body"></tbody>
-                </table>
-            </div>
-        </section>
+            <button type="submit" id="save-profile-btn" class="button-primary">Save Profile</button>
+        </form>
+    </div>
+</section>
 
         <!-- Scoreboard Page -->
         <section id="scoreboard-page" class="page">
@@ -192,9 +195,11 @@
             <div id="games-container">
                 <p>Loading live game data...</p>
             </div>
-            <button id="save-picks-btn" class="save-picks-btn">Save My Picks</button>
         </section>
     </main>
+    <div id="floating-save-container" class="hidden">
+        <button id="save-picks-btn" class="save-picks-btn">Save My Picks</button>
+    </div>
 
     <script src="app.js" type="module"></script>
 </body>
