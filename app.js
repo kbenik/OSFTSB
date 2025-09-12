@@ -68,59 +68,61 @@ function parseCSV(csvText) {
 }
 
 function parseTeamInfoCSV(csvText) {
-    const lines = csvText.trim().replace(/\r\n/g, '\n').split('\n');
-    if (lines.length < 2) return [];
+    // This function has been rewritten to be more robust and handle the new column.
+    const rawLines = csvText.trim().replace(/\r\n/g, '\n').split('\n');
+    const lines = [];
+    let currentLine = '';
 
-    const dataRows = [];
-
-    // Start from the second line (index 1) to skip the headers.
-    for (let i = 1; i < lines.length; i++) {
-        const line = lines[i];
-
-        // Skip any empty lines or the initial instruction row.
-        if (!line || line.trim() === '' || line.startsWith('"Please provide')) {
-            continue;
-        }
-
-        try {
-            // Find the first two commas. The Team Name is between them.
-            const firstCommaIndex = line.indexOf(',');
-            const secondCommaIndex = line.indexOf(',', firstCommaIndex + 1);
-
-            // If a row doesn't have at least two commas, we can't process it.
-            if (firstCommaIndex === -1 || secondCommaIndex === -1) {
-                console.warn('Skipping malformed team info row:', line);
-                continue;
-            }
-
-            // Extract the team name from between the commas.
-            const teamName = line.substring(firstCommaIndex + 1, secondCommaIndex).trim();
-
-            // The summary is EVERYTHING after the second comma.
-            let summary = line.substring(secondCommaIndex + 1).trim();
-
-            // Clean up the summary: remove surrounding quotes and fix escaped quotes.
-            if (summary.startsWith('"') && summary.endsWith('"')) {
-                summary = summary.substring(1, summary.length - 1);
-            }
-            summary = summary.replace(/""/g, '"');
-
-            // Only add the row if we successfully found a team name.
-            if (teamName) {
-                dataRows.push({
-                    'TeamName': teamName,
-                    'AISummary': summary
-                });
-            }
-        } catch (e) {
-            // This is a safety net to prevent any unexpected error from crashing the app.
-            console.error('An unexpected error occurred parsing a team info row:', line, e);
+    for (const rawLine of rawLines) {
+        currentLine += rawLine;
+        const quoteCount = (currentLine.match(/"/g) || []).length;
+        if (quoteCount % 2 === 0) {
+            lines.push(currentLine);
+            currentLine = '';
+        } else {
+            currentLine += '\n';
         }
     }
+    if (currentLine) lines.push(currentLine);
 
+    if (lines.length < 2) return [];
+
+    // Define headers to map the CSV columns correctly.
+    const headers = ['Index', 'TeamName', 'AISummary', 'DepthChart'];
+    const dataRows = [];
+    const regex = /(?:"([^"]*)"|([^,]*))(?:,|$)/g;
+
+    for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line || line.trim() === '' || line.startsWith('"Please provide')) continue;
+
+        const values = [];
+        let match;
+        regex.lastIndex = 0;
+        while (match = regex.exec(line)) {
+            if (match.index === regex.lastIndex) regex.lastIndex++;
+            values.push((match[1] || match[2] || '').trim());
+        }
+
+        const rowData = {};
+        headers.forEach((header, index) => {
+            let value = values[index] || '';
+            if (header === 'AISummary' && value.startsWith('"') && value.endsWith('"')) {
+                value = value.substring(1, value.length - 1);
+            }
+            rowData[header] = value.replace(/""/g, '"');
+        });
+
+        if (rowData.TeamName) {
+            dataRows.push({
+                'TeamName': rowData.TeamName,
+                'AISummary': rowData.AISummary,
+                'DepthChart': rowData.DepthChart
+            });
+        }
+    }
     return dataRows;
 }
-
 function getKickoffTimeAsDate(game) {
     if (!game || !game.Date || !game.Time) {
         return new Date('1970-01-01T00:00:00Z');
@@ -1440,12 +1442,13 @@ function setupEventListeners() {
         if (e.target.matches('.join-match-btn')) joinMatch(e.target.dataset.matchId);
         if (e.target.matches('#create-match-btn')) createMatch();
         if (e.target.classList.contains('info-tab')) {
-            // *** THIS IS THE FIX ***
-            e.stopPropagation(); // Prevents the click from selecting the team.
+            e.stopPropagation(); 
             const teamName = e.target.dataset.teamName;
             const info = teamInfo[teamName];
             if (info) {
-                showInfoPopup(info.TeamName, info.AISummary);
+                // --- THIS IS THE FIX ---
+                // The third argument (info.DepthChart) is now correctly passed to the function.
+                showInfoPopup(info.TeamName, info.AISummary, info.DepthChart);
             }
         }
         if (e.target.classList.contains('modal-overlay') || e.target.classList.contains('modal-close-btn')) {
@@ -1473,6 +1476,7 @@ function setupEventListeners() {
         }
     });
 }
+
 
 function startApp() {
     supabase.auth.onAuthStateChange(async (event, session) => {
@@ -1520,23 +1524,36 @@ function startApp() {
     });
 }
 
-function showInfoPopup(teamName, summary) {
+function showInfoPopup(teamName, summary, depthChartUrl) {
     let modal = document.getElementById('info-modal');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'info-modal';
         modal.className = 'modal-overlay hidden';
+        // The modal now includes a container for the link.
         modal.innerHTML = `
             <div class="modal-content">
                 <button class="modal-close-btn">&times;</button>
                 <h3 id="modal-team-name"></h3>
                 <p id="modal-summary"></p>
+                <div id="modal-link-container"></div>
             </div>
         `;
         document.body.appendChild(modal);
     }
     document.getElementById('modal-team-name').textContent = teamName;
     document.getElementById('modal-summary').textContent = summary;
+
+    // --- THIS IS THE NEW LOGIC ---
+    // It finds the link container and adds the button if a URL is present.
+    const linkContainer = document.getElementById('modal-link-container');
+    if (depthChartUrl && depthChartUrl.trim() !== '') {
+        linkContainer.innerHTML = `<a href="${depthChartUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">Depth Chart</a>`;
+    } else {
+        linkContainer.innerHTML = ''; // Keep it empty if there's no link.
+    }
+    // --- END OF NEW LOGIC ---
+
     modal.classList.remove('hidden');
 }
 
