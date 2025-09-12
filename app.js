@@ -626,6 +626,7 @@ async function displayScoreboardPage() {
         chartView.innerHTML = '<p>Please join a match to see standings.</p>';
     }
 }
+
 async function loadScoreboardForMatch(matchId) {
     try {
         const { data: members, error: membersError } = await supabase
@@ -646,22 +647,29 @@ async function loadScoreboardForMatch(matchId) {
 
         const { chartData, tableData } = processWeeklyScores(members, allScoredPicks || []);
         renderScoreChart(chartData);
-        
-        // *** MODIFIED: Pass the global 'defaultWeek' to the rendering function ***
         renderPlayerScoresTable(tableData, defaultWeek); 
 
-        const weekSelector = document.getElementById('run-sheet-week-selector');
+        // --- THIS IS THE FIX ---
+        // By cloning and replacing the selector, we ensure any old, stale event listeners are destroyed.
+        let weekSelector = document.getElementById('run-sheet-week-selector');
         const allWeeks = [...new Set(allGames.filter(g => g.Week.startsWith('Week ')).map(g => g.Week))];
         allWeeks.sort((a, b) => parseInt(a.split(' ')[1]) - parseInt(b.split(' ')[1]));
-        weekSelector.innerHTML = allWeeks.map(w => `<option value="${w}">${w}</option>`).join('');
         
-        weekSelector.value = defaultWeek;
+        // Create a clean clone of the element.
+        const newSelector = weekSelector.cloneNode(true);
+        weekSelector.parentNode.replaceChild(newSelector, weekSelector);
+        
+        // Populate and set the value on the new, clean selector.
+        newSelector.innerHTML = allWeeks.map(w => `<option value="${w}">${w}</option>`).join('');
+        newSelector.value = defaultWeek;
 
-        weekSelector.addEventListener('change', () => {
-            renderRunSheetForWeek(weekSelector.value, matchId, members);
+        // Now, add the event listener. This is the ONLY listener on this element.
+        newSelector.addEventListener('change', () => {
+            renderRunSheetForWeek(newSelector.value, matchId, members);
         });
 
-        renderRunSheetForWeek(defaultWeek, matchId, members);
+        renderRunSheetForWeek(newSelector.value, matchId, members);
+        // --- END OF FIX ---
 
     } catch (error) {
         console.error("Error loading scoreboard data:", error.message);
@@ -946,31 +954,45 @@ async function renderScoreChart(chartData) {
     });
 }
 
+
 function getDynamicStyles(points) {
+    // Clamp the points to our defined min/max range for calculation
     const clampedPoints = Math.max(-20, Math.min(10, points));
-    let backgroundColor, color = '#333';
-    if (clampedPoints > 5) {
-        const percentage = (clampedPoints - 5) / 5;
-        const lightness = 80 - (percentage * 50);
-        backgroundColor = `hsl(120, 50%, ${lightness}%)`;
-        if (lightness < 55) { color = 'white'; }
-    } else if (clampedPoints >= 0) {
-        const percentage = clampedPoints / 5;
-        const lightness = 90 + (percentage * 10);
-        backgroundColor = `hsl(0, 0%, ${lightness}%)`;
-    } else if (clampedPoints >= -10) {
-        const percentage = Math.abs(clampedPoints / 10);
-        const lightness = 90 - (percentage * 90);
-        backgroundColor = `hsl(0, 0%, ${lightness}%)`;
-        if (lightness < 50) { color = 'white'; }
-    } else {
-        const percentage = (Math.abs(clampedPoints) - 10) / 10;
-        const saturation = percentage * 100;
-        const lightness = percentage * 25;
-        backgroundColor = `hsl(0, ${saturation}%, ${lightness}%)`;
-        color = 'white';
+    const absPoints = Math.abs(clampedPoints);
+
+    // 1. Default to a neutral state
+    let backgroundColor = '#f9f9f9'; // A very light, neutral gray
+    let color = '#333';             // Standard dark text
+    let fontWeight = '500';          // A slightly bolder normal weight
+
+    // 2. Use color for status (positive/negative)
+    if (clampedPoints > 0) {
+        color = '#2e7d32'; // Dark green text
+    } else if (clampedPoints < 0) {
+        color = '#c62828'; // Dark red text
     }
-    return { backgroundColor, color };
+
+    // 3. Use font weight for magnitude
+    if (absPoints >= 5) {
+        fontWeight = 'bold';
+    }
+    // Make the font weight extra bold for the highlighted scores
+    if (clampedPoints > 5 || clampedPoints < -10) {
+        fontWeight = '800';
+    }
+
+    // --- THIS IS THE FIX ---
+    // 4. Add background highlight based on the new, separate thresholds
+    if (clampedPoints > 5) {
+        backgroundColor = 'hsl(120, 75%, 35%)'; // Deep green
+        color = 'white'; // Use white text on the dark background
+    } else if (clampedPoints < -10) {
+        backgroundColor = 'hsl(0, 75%, 35%)'; // Deep red
+        color = 'white'; // Use white text on the dark background
+    }
+    // --- END OF FIX ---
+
+    return { backgroundColor, color, fontWeight };
 }
 
 function renderRunSheet(members, allPicks, week) {
