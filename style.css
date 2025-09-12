@@ -26,7 +26,13 @@ h1, h2 { color: var(--primary-color); }
 /* --- Header & Navigation (UPDATED) --- */
 header { background-color: var(--primary-color); color: white; padding: 0.5rem 0; box-shadow: var(--box-shadow); position: relative;}
 .nav-container { display: flex; justify-content: space-between; align-items: center; }
-#logo { font-weight: bold; font-size: 1.5rem !important; }
+#logo { 
+    font-weight: bold; 
+    font-size: 1.5rem !important;
+    color: white;
+    padding: 5px 10px;
+    cursor: default; /* Show a normal cursor, not a pointer */
+}
 #main-nav { 
     display: flex; /* This makes it visible on desktop */
     flex-grow: 1; /* Allows it to take up space */
@@ -752,10 +758,40 @@ canvas {
 .modal-link-button:hover {
     background-color: var(--secondary-color);
 }
-
 #modal-link-container {
     margin-top: 20px;
     display: flex;
     justify-content: flex-end;
     gap: 10px; /* Adds space between the buttons */
+}
+.user-profile-link {
+    display: flex;
+    align-items: center;
+    gap: 10px; /* Space between avatar and text */
+}
+/* This is the new container for the floating button */
+#floating-save-container {
+    position: fixed; /* This is what makes it float */
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 15px 20px;
+    background-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 100; /* Ensures it stays on top of other elements */
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+}
+
+/* Updated styles for the button itself */
+.save-picks-btn {
+    width: 100%;
+    max-width: 960px; /* Ensures it doesn't get wider than the main content */
+    margin: 0; /* Removes any default margin */
+}
+
+/* This adds space at the bottom of the game list so the floating button doesn't cover the last game card */
+#games-container {
+    padding-bottom: 120px; 
 }
