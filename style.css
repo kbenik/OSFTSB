@@ -459,6 +459,15 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     #save-profile-btn {
         width: 100%;
     }
+    /* --- THIS IS THE FIX: Hides the "Welcome, Kev" text on mobile --- */
+    .welcome-message-text {
+        display: none;
+    }
+
+    /* This ensures the user profile link and logout button are spaced correctly on mobile */
+    #user-status {
+        gap: 5px;
+    }
     
 }
 /* In style.css, add these new styles. You can place them near your other scoreboard styles. */
@@ -837,4 +846,20 @@ canvas {
     /* The animation ends where it began */
     box-shadow: 0 0 0 0 rgba(213, 10, 10, 0);
   }
+}
+
+.logout-icon-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.3s;
+}
+
+.logout-icon-btn:hover {
+    background-color: var(--secondary-color);
 }
