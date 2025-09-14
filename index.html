@@ -197,10 +197,16 @@
             </div>
         </section>
     </main>
-    <div id="floating-save-container" class="hidden">
+   <div id="floating-save-container" class="hidden">
+    <div class="floating-save-inner">
+        <!-- THIS IS THE NEW STRUCTURE FOR THE COUNTER -->
+        <div id="picks-counter">
+            <span class="counter-label">Picks: </span>
+            <span id="counter-value">0</span>
+        </div>
         <button id="save-picks-btn" class="save-picks-btn">Save My Picks</button>
     </div>
-
+</div>
     <script src="app.js" type="module"></script>
 </body>
 </html>
