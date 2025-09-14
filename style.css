@@ -459,6 +459,7 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     #save-profile-btn {
         width: 100%;
     }
+    
 }
 /* In style.css, add these new styles. You can place them near your other scoreboard styles. */
 
@@ -784,14 +785,56 @@ canvas {
     justify-content: center;
 }
 
+.floating-save-inner {
+    display: flex;
+    align-items: center;
+    gap: 20px; /* Adds space between the counter and the button */
+    width: 100%;
+    max-width: 960px; /* Ensures alignment with the main page content */
+}
+
+/* Style for the new counter element */
+#picks-counter {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-color);
+    white-space: nowrap;
+    
+    /* New styling for the pill shape */
+    background-color: #f0f0f0;
+    padding: 6px 12px;
+    border-radius: 20px; /* This creates the rounded pill shape */
+    border: 1px solid #ddd;
+    transition: background-color 0.3s;
+    
+    /* Apply the animation here */
+    animation: pulse-red 2.5s infinite;
+}
+
 /* Updated styles for the button itself */
 .save-picks-btn {
     width: 100%;
     max-width: 960px; /* Ensures it doesn't get wider than the main content */
+    flex-grow: 1;
     margin: 0; /* Removes any default margin */
 }
 
 /* This adds space at the bottom of the game list so the floating button doesn't cover the last game card */
 #games-container {
     padding-bottom: 120px; 
+}
+
+@keyframes pulse-red {
+  0% {
+    /* The shadow starts with 0 size and 50% opacity */
+    box-shadow: 0 0 0 0 rgba(213, 10, 10, 0.5);
+  }
+  70% {
+    /* The shadow expands to 12px and fades out */
+    box-shadow: 0 0 0 12px rgba(213, 10, 10, 0);
+  }
+  100% {
+    /* The animation ends where it began */
+    box-shadow: 0 0 0 0 rgba(213, 10, 10, 0);
+  }
 }
