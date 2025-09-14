@@ -212,6 +212,23 @@ function updateUserStatusUI(userProfile) {
     }
 }
 
+async function fetchGameData() {
+    const gameResponse = await fetch(`${SHEET_URL}&t=${new Date().getTime()}`);
+    const gameCsvText = await gameResponse.text();
+    allGames = parseCSV(gameCsvText); 
+    
+    // Recalculate team data in case logos have changed
+    allGames.forEach(game => {
+        if (game['Home Display Name'] && game['Home Logo']) {
+            teamData[game['Home Display Name']] = game['Home Logo'];
+        }
+        if (game['Away Display Name'] && game['Away Logo']) {
+            teamData[game['Away Display Name']] = game['Away Logo'];
+        }
+    });
+}
+
+
 function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
     const activePage = document.getElementById(pageId);
@@ -657,27 +674,43 @@ async function loadScoreboardForMatch(matchId) {
         renderScoreChart(chartData);
         renderPlayerScoresTable(tableData, defaultWeek); 
 
-        // --- THIS IS THE FIX ---
-        // By cloning and replacing the selector, we ensure any old, stale event listeners are destroyed.
         let weekSelector = document.getElementById('run-sheet-week-selector');
         const allWeeks = [...new Set(allGames.filter(g => g.Week.startsWith('Week ')).map(g => g.Week))];
         allWeeks.sort((a, b) => parseInt(a.split(' ')[1]) - parseInt(b.split(' ')[1]));
         
-        // Create a clean clone of the element.
         const newSelector = weekSelector.cloneNode(true);
         weekSelector.parentNode.replaceChild(newSelector, weekSelector);
         
-        // Populate and set the value on the new, clean selector.
         newSelector.innerHTML = allWeeks.map(w => `<option value="${w}">${w}</option>`).join('');
         newSelector.value = defaultWeek;
 
-        // Now, add the event listener. This is the ONLY listener on this element.
         newSelector.addEventListener('change', () => {
             renderRunSheetForWeek(newSelector.value, matchId, members);
         });
 
+        const refreshBtn = document.getElementById('refresh-run-sheet-btn');
+        const handleRefresh = async () => {
+            const originalIcon = refreshBtn.innerHTML;
+            refreshBtn.innerHTML = '...';
+            refreshBtn.disabled = true;
+
+            try {
+                await fetchGameData();
+                const selectedWeek = newSelector.value;
+                await renderRunSheetForWeek(selectedWeek, matchId, members);
+            } catch (err) {
+                console.error("Failed to refresh run sheet:", err);
+            } finally {
+                refreshBtn.innerHTML = originalIcon;
+                refreshBtn.disabled = false;
+            }
+        };
+
+        const newRefreshBtn = refreshBtn.cloneNode(true);
+        refreshBtn.parentNode.replaceChild(newRefreshBtn, refreshBtn);
+        newRefreshBtn.addEventListener('click', handleRefresh);
+
         renderRunSheetForWeek(newSelector.value, matchId, members);
-        // --- END OF FIX ---
 
     } catch (error) {
         console.error("Error loading scoreboard data:", error.message);
@@ -1011,19 +1044,20 @@ function renderRunSheet(members, allPicks, week) {
     const sortedMembers = [...members].sort((a, b) => a.profiles.username.localeCompare(b.profiles.username));
     let tableHtml = '<table class="run-sheet-table">';
 
-    // *** THIS IS THE MODIFIED SECTION ***
     tableHtml += '<thead><tr><th>Game</th>';
     sortedMembers.forEach(member => {
-        // Conditionally render the avatar icon or the username in the header
         const memberDisplay = member.profiles.avatar_url
             ? `<div class="player-header" title="${member.profiles.username}"><img src="${member.profiles.avatar_url}" class="run-sheet-avatar" onerror="this.src='${DEFAULT_AVATAR_URL}'"></div>`
             : `<div class="player-header">${member.profiles.username}</div>`;
         tableHtml += `<th>${memberDisplay}</th>`;
     });
     tableHtml += '</tr></thead>';
-    // *** END OF MODIFIED SECTION ***
 
     tableHtml += '<tbody>';
+
+    const weeklyTotals = new Map();
+    sortedMembers.forEach(member => weeklyTotals.set(member.profiles.id, 0));
+
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
         const hasKickedOff = kickoff < now;
@@ -1113,8 +1147,13 @@ function renderRunSheet(members, allPicks, week) {
                     }
 
                     if (typeof points !== 'undefined') {
+                        const currentTotal = weeklyTotals.get(member.profiles.id) || 0;
+                        weeklyTotals.set(member.profiles.id, currentTotal + points);
+                    }
+
+                    if (typeof points !== 'undefined') {
                         const styles = getDynamicStyles(points);
-                        cellStyle = `style="background-color: ${styles.backgroundColor}; color: ${styles.color};"`;
+                        cellStyle = `style="background-color: ${styles.backgroundColor}; color: ${styles.color}; font-weight: ${styles.fontWeight};"`;
                         const pointsText = points > 0 ? `+${points}` : points;
                         cellContent = `
                             <div class="pick-content-wrapper">
@@ -1140,10 +1179,23 @@ function renderRunSheet(members, allPicks, week) {
 
         tableHtml += '</tr>';
     });
-    tableHtml += '</tbody></table>';
+    tableHtml += '</tbody>';
+
+    let footerHtml = '<tfoot class="total-row"><tr><td>Weekly Total</td>';
+    sortedMembers.forEach(member => {
+        const total = weeklyTotals.get(member.profiles.id);
+        const totalDisplay = total > 0 ? `+${total}` : total;
+        footerHtml += `<td>${totalDisplay}</td>`;
+    });
+    footerHtml += '</tr></tfoot>';
+    tableHtml += footerHtml;
+
+    tableHtml += '</table>';
 
     container.innerHTML = tableHtml;
 }
+
+
 async function renderRunSheetForWeek(week, matchId, members) {
     const runSheetContainer = document.getElementById('run-sheet-container');
     const weekTitle = document.getElementById('scoreboard-week-title');
@@ -1623,31 +1675,16 @@ function hideInfoPopup() {
 
 async function init() {
     try {
-        const [gameResponse, infoResponse] = await Promise.all([
-            fetch(`${SHEET_URL}&t=${new Date().getTime()}`),
-            fetch(`${TEAM_INFO_URL}&t=${new Date().getTime()}`)
-        ]);
+        await fetchGameData();
 
-        const gameCsvText = await gameResponse.text();
+        const infoResponse = await fetch(`${TEAM_INFO_URL}&t=${new Date().getTime()}`);
         const infoCsvText = await infoResponse.text();
         
-        // --- THIS IS THE FIX ---
-        // Use the original parseCSV for the game data.
-        allGames = parseCSV(gameCsvText); 
-        // Use the new, separate parser for the team info data.
         const allInfo = parseTeamInfoCSV(infoCsvText); 
-
         allInfo.forEach(info => { teamInfo[info.TeamName] = info; });
+        
         defaultWeek = determineDefaultWeek(allGames);
-        allGames.forEach(game => {
-            if (game['Home Display Name'] && game['Home Logo']) {
-                teamData[game['Home Display Name']] = game['Home Logo'];
-            }
-            if (game['Away Display Name'] && game['Away Logo']) {
-                teamData[game['Away Display Name']] = game['Away Logo'];
-            }
-        });
-
+        
         setupEventListeners();
         startApp();
 
