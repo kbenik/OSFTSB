@@ -365,6 +365,15 @@ async function renderGamesForWeek(week, matchId) {
     await loadAndApplyUserPicks(week, matchId);
 }
 
+function updatePicksCounter() {
+    const counterElement = document.getElementById('picks-counter');
+    if (!counterElement) return;
+
+    // Count how many picks have a selected team
+    const validPicksCount = Object.values(userPicks).filter(pick => pick).length;
+    counterElement.textContent = `Picks: ${validPicksCount}`;
+}
+
 async function loadAndApplyUserPicks(week, matchId) {
     try {
         const { data: savedPicks, error } = await supabase
@@ -404,6 +413,7 @@ async function loadAndApplyUserPicks(week, matchId) {
                 }
             }
         });
+        updatePicksCounter();
     } catch (err) {
         console.error("Non-critical error fetching user picks:", err.message);
     }
@@ -1241,6 +1251,7 @@ function addGameCardEventListeners() {
                     card.querySelectorAll('.team').forEach(t => t.classList.remove('selected'));
                     team.classList.add('selected');
                 }
+                updatePicksCounter();
             });
         });
 
