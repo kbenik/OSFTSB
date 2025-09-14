@@ -1042,6 +1042,46 @@ function renderRunSheet(members, allPicks, week) {
     const now = new Date();
 
     const sortedMembers = [...members].sort((a, b) => a.profiles.username.localeCompare(b.profiles.username));
+
+    // --- NEW: PRE-CALCULATE TOTALS ---
+    const weeklyTotals = new Map();
+    sortedMembers.forEach(member => weeklyTotals.set(member.profiles.id, 0));
+
+    weeklyGames.forEach(game => {
+        const kickoff = getKickoffTimeAsDate(game);
+        if (kickoff >= now) return; // Only calculate for games that have started
+
+        const isGameFinal = game.Status === 'post';
+        const showScore = game.Status !== 'pre';
+        const homeScoreNum = parseInt(game['Home Score'], 10);
+        const awayScoreNum = parseInt(game['Away Score'], 10);
+
+        sortedMembers.forEach(member => {
+            const pick = allPicks.find(p => p.game_id == game['Game Id'] && p.user_id === member.profiles.id);
+            if (pick) {
+                let points;
+                if (isGameFinal) {
+                    points = pick.is_correct ? pick.wager : (pick.wager * -2);
+                } else if (showScore && !isNaN(homeScoreNum) && !isNaN(awayScoreNum) && (homeScoreNum > 0 || awayScoreNum > 0)) {
+                    let winningTeam = 'TIE';
+                    if (homeScoreNum > awayScoreNum) winningTeam = game['Home Display Name'];
+                    if (awayScoreNum > homeScoreNum) winningTeam = game['Away Display Name'];
+                    
+                    points = 0;
+                    if (pick.picked_team === winningTeam) points = pick.wager;
+                    else if (winningTeam !== 'TIE') points = pick.wager * -2;
+                }
+                
+                if (typeof points !== 'undefined') {
+                    if (pick.is_double_up) points *= 2;
+                    const currentTotal = weeklyTotals.get(member.profiles.id) || 0;
+                    weeklyTotals.set(member.profiles.id, currentTotal + points);
+                }
+            }
+        });
+    });
+    // --- END PRE-CALCULATION ---
+
     let tableHtml = '<table class="run-sheet-table">';
 
     tableHtml += '<thead><tr><th>Game</th>';
@@ -1055,8 +1095,15 @@ function renderRunSheet(members, allPicks, week) {
 
     tableHtml += '<tbody>';
 
-    const weeklyTotals = new Map();
-    sortedMembers.forEach(member => weeklyTotals.set(member.profiles.id, 0));
+    // --- NEW: RENDER TOTAL ROW AT THE TOP OF THE BODY ---
+    tableHtml += '<tr class="weekly-total-row"><td class="game-matchup-cell">Total</td>';
+    sortedMembers.forEach(member => {
+        const total = weeklyTotals.get(member.profiles.id);
+        const totalDisplay = total > 0 ? `+${total}` : total;
+        tableHtml += `<td>${totalDisplay}</td>`;
+    });
+    tableHtml += '</tr>';
+    // --- END TOTAL ROW ---
 
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
@@ -1147,11 +1194,6 @@ function renderRunSheet(members, allPicks, week) {
                     }
 
                     if (typeof points !== 'undefined') {
-                        const currentTotal = weeklyTotals.get(member.profiles.id) || 0;
-                        weeklyTotals.set(member.profiles.id, currentTotal + points);
-                    }
-
-                    if (typeof points !== 'undefined') {
                         const styles = getDynamicStyles(points);
                         cellStyle = `style="background-color: ${styles.backgroundColor}; color: ${styles.color}; font-weight: ${styles.fontWeight};"`;
                         const pointsText = points > 0 ? `+${points}` : points;
@@ -1179,18 +1221,7 @@ function renderRunSheet(members, allPicks, week) {
 
         tableHtml += '</tr>';
     });
-    tableHtml += '</tbody>';
-
-    let footerHtml = '<tfoot class="total-row"><tr><td>Weekly Total</td>';
-    sortedMembers.forEach(member => {
-        const total = weeklyTotals.get(member.profiles.id);
-        const totalDisplay = total > 0 ? `+${total}` : total;
-        footerHtml += `<td>${totalDisplay}</td>`;
-    });
-    footerHtml += '</tr></tfoot>';
-    tableHtml += footerHtml;
-
-    tableHtml += '</table>';
+    tableHtml += '</tbody></table>';
 
     container.innerHTML = tableHtml;
 }
