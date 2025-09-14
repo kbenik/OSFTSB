@@ -189,19 +189,19 @@ function updateUserStatusUI(userProfile) {
         const username = userProfile.username || currentUser.email;
         const avatarUrl = userProfile.avatar_url;
         
-        let avatarImg = '';
-        if (avatarUrl) {
-            avatarImg = `<img src="${avatarUrl}" alt="User Avatar" class="header-avatar" onerror="this.src='${DEFAULT_AVATAR_URL}'">`;
-        }
+        const avatarImg = `<img src="${avatarUrl || DEFAULT_AVATAR_URL}" alt="User Avatar" class="header-avatar">`;
         
-        // --- THIS IS THE FIX ---
-        // The avatar and username are now wrapped in a link to the #home page.
+        // --- THIS IS THE FIX: A classic SVG icon for logout ---
+        const logoutIcon = `<svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="white"><path d="M0 0h24v24H0z" fill="none"/><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/></svg>`;
+
         userStatusDiv.innerHTML = `
             <a href="#home" class="user-profile-link nav-link">
                 ${avatarImg}
-                <span>Welcome, ${username}</span>
+                <!-- THIS IS THE FIX: The welcome text is now in its own span to be hidden on mobile -->
+                <span class="welcome-message-text">Welcome, ${username}</span>
             </a>
-            <button id="logout-btn">Logout</button>
+            <!-- THIS IS THE FIX: The button now contains the icon and has a new class -->
+            <button id="logout-btn" class="logout-icon-btn" title="Logout">${logoutIcon}</button>
         `;
         // --- END OF FIX ---
 
