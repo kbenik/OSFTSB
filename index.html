@@ -17,8 +17,7 @@
         </div>
         <nav id="main-nav">
             <ul>
-                <!-- THIS IS THE FIX: The href now points to #scoreboard -->
-                <li><a href="#scoreboard" class="nav-link">Dashboard</a></li>
+                <li><a href="#scoreboard" class="nav-link">Scoreboard</a></li>
                 <li><a href="#picks" class="nav-link">Picks</a></li>
                 <li><a href="#matches" class="nav-link">Matches</a></li>
                 <li><a href="#rules" class="nav-link">Rules</a></li>
@@ -108,13 +107,20 @@
 
         <!-- Scoreboard Page -->
         <section id="scoreboard-page" class="page">
-    <h1>Dashboard</h1>
+    <h1>Scoreboard</h1>
     <div class="card">
         <div class="scoreboard-header-controls">
             <h2 id="scoreboard-match-name">Match Standings</h2>
+            <!-- THIS IS THE FIX: Removed fill="currentColor" from the SVGs -->
             <div class="view-toggle-buttons">
-                <button id="show-chart-btn" class="toggle-btn">Chart</button>
-                <button id="show-table-btn" class="toggle-btn active">Table</button>
+                <button id="show-chart-btn" class="toggle-btn">
+                    <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M3.5 18.49l6-6.01 4 4L22 6.92l-1.41-1.41-7.09 7.97-4-4L2 16.99l1.5 1.5z"/></svg>
+                    <span class="toggle-text">Chart</span>
+                </button>
+                <button id="show-table-btn" class="toggle-btn active">
+                    <svg class="toggle-icon" xmlns="http://www.w3.org/2000/svg" height="20px" viewBox="0 0 24 24" width="20px"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 10h4v4H4v-4zm0 6h4v4H4v-4zm6 4h4v-4h-4v4zm0-6h4v-4h-4v4zm6 6h4v-4h-4v4zm0-6h4v-4h-4v4z"/></svg>
+                    <span class="toggle-text">Table</span>
+                </button>
                 <button id="show-payout-btn" class="toggle-btn">$</button>
             </div>
         </div>
