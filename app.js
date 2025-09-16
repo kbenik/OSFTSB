@@ -612,45 +612,136 @@ async function displayScoreboardPage() {
     const runSheetContainer = document.getElementById('run-sheet-container');
     const chartView = document.getElementById('chart-view');
     const tableView = document.getElementById('table-view');
+    const payoutView = document.getElementById('payout-view'); // New payout view
     const showChartBtn = document.getElementById('show-chart-btn');
     const showTableBtn = document.getElementById('show-table-btn');
-    if (!runSheetContainer || !chartView || !tableView || !showChartBtn || !showTableBtn) {
-        console.error("Scoreboard HTML elements not found! Please ensure your index.html file has been updated with the new chart/table toggle structure.");
+    const showPayoutBtn = document.getElementById('show-payout-btn'); // New payout button
+
+    if (!runSheetContainer || !chartView || !tableView || !payoutView || !showChartBtn || !showTableBtn || !showPayoutBtn) {
+        console.error("Scoreboard HTML elements not found! Please ensure your index.html file has been updated with the new chart/table/payout toggle structure.");
         return;
     }
+
     if (scoreChartInstance) {
         scoreChartInstance.destroy();
         scoreChartInstance = null;
     }
     runSheetContainer.innerHTML = '';
+    payoutView.innerHTML = ''; // Clear the payout view
 
-    // --- THIS IS THE MODIFIED LOGIC ---
-    // The 'hidden' class has been swapped, and the 'active' class is now on the table button.
+    // Set initial view to the table
     chartView.classList.add('hidden');
     tableView.classList.remove('hidden');
+    payoutView.classList.add('hidden');
     showChartBtn.classList.remove('active');
     showTableBtn.classList.add('active');
-    // --- END OF MODIFICATION ---
+    showPayoutBtn.classList.remove('active');
 
     showChartBtn.onclick = () => {
         chartView.classList.remove('hidden');
         tableView.classList.add('hidden');
+        payoutView.classList.add('hidden');
         showChartBtn.classList.add('active');
         showTableBtn.classList.remove('active');
+        showPayoutBtn.classList.remove('active');
     };
+
     showTableBtn.onclick = () => {
         tableView.classList.remove('hidden');
         chartView.classList.add('hidden');
+        payoutView.classList.add('hidden');
         showTableBtn.classList.add('active');
         showChartBtn.classList.remove('active');
+        showPayoutBtn.classList.remove('active');
     };
+
+    showPayoutBtn.onclick = () => {
+        payoutView.classList.remove('hidden');
+        chartView.classList.add('hidden');
+        tableView.classList.add('hidden');
+        showPayoutBtn.classList.add('active');
+        showChartBtn.classList.remove('active');
+        showTableBtn.classList.remove('active');
+    };
+
     if (currentSelectedMatchId) {
         loadScoreboardForMatch(currentSelectedMatchId);
     } else {
         runSheetContainer.innerHTML = '<p>Please join a match to see the scoreboard.</p>';
         chartView.innerHTML = '<p>Please join a match to see standings.</p>';
+        payoutView.innerHTML = '<p>Please join a match to see payouts.</p>';
     }
 }
+
+function renderPayouts(tableData, playerCount) {
+    const payoutContainer = document.getElementById('payout-view');
+    const { playerData } = tableData;
+    const { buy_in, value_per_point } = currentMatchSettings;
+
+    if (!buy_in || !value_per_point) {
+        payoutContainer.innerHTML = '<div class="card"><p>This match does not have payout information configured.</p></div>';
+        return;
+    }
+
+    if (!playerData || playerData.length < 2) {
+        payoutContainer.innerHTML = '<div class="card"><p>Not enough player data to calculate payouts.</p></div>';
+        return;
+    }
+
+    const firstPlaceWinnings = playerCount * buy_in;
+    let payoutHtml = `
+        <div class="payout-container">
+            <div class="payout-summary">
+                <h3>1st Place Prize</h3>
+                <div class="prize-amount">$${firstPlaceWinnings.toFixed(2)}</div>
+            </div>
+
+            <table class="payout-table">
+                <tbody> 
+    `;
+
+    const firstPlaceScore = playerData[0].runningTotal;
+
+    for (let i = 1; i < playerData.length; i++) {
+        const payingPlayer = playerData[i];
+        const owedPlayer = playerData[i - 1];
+        
+        const pointsFromFirst = firstPlaceScore - payingPlayer.runningTotal;
+        const amountOwed = pointsFromFirst * value_per_point;
+        
+        const payingPlayerDisplay = `
+            <div class="player-cell" title="${payingPlayer.username}">
+                <img src="${payingPlayer.avatar_url || DEFAULT_AVATAR_URL}" class="table-avatar" onerror="this.src='${DEFAULT_AVATAR_URL}'">
+                <span>${payingPlayer.username}</span>
+            </div>`;
+            
+        const owedPlayerDisplay = `
+            <div class="player-cell" title="${owedPlayer.username}">
+                <img src="${owedPlayer.avatar_url || DEFAULT_AVATAR_URL}" class="table-avatar" onerror="this.src='${DEFAULT_AVATAR_URL}'">
+                <span>${owedPlayer.username}</span>
+            </div>`;
+
+        // The new table row structure
+        payoutHtml += `
+            <tr>
+                <td>${payingPlayerDisplay}</td>
+                <!-- THIS IS THE FIX: Using a clean arrow symbol -->
+                <td class="owes-cell">&rarr;</td>
+                <td>${owedPlayerDisplay}</td>
+                <td>$${amountOwed.toFixed(2)}</td>
+            </tr>
+        `;
+    }
+
+    payoutHtml += `
+                </tbody>
+            </table>
+        </div> 
+    `;
+    
+    payoutContainer.innerHTML = payoutHtml;
+}
+
 
 async function loadScoreboardForMatch(matchId) {
     try {
@@ -673,6 +764,7 @@ async function loadScoreboardForMatch(matchId) {
         const { chartData, tableData } = processWeeklyScores(members, allScoredPicks || []);
         renderScoreChart(chartData);
         renderPlayerScoresTable(tableData, defaultWeek); 
+        renderPayouts(tableData, members.length); // New function call
 
         let weekSelector = document.getElementById('run-sheet-week-selector');
         const allWeeks = [...new Set(allGames.filter(g => g.Week.startsWith('Week ')).map(g => g.Week))];
@@ -1474,11 +1566,14 @@ async function setupGlobalMatchSelector() {
     }
 
     const matchIds = memberships.map(m => m.match_id);
-    // *** MODIFIED QUERY: Fetch the new column ***
+    
+    // --- THIS IS THE FIX ---
+    // The query has been updated to select the new 'buy_in' and 'value_per_point' columns.
     const { data: userMatches, error: matchesError } = await supabase
         .from('matches')
-        .select('id, name, allow_multiple_double_ups') // <-- ADDED THE NEW COLUMN
+        .select('id, name, allow_multiple_double_ups, buy_in, value_per_point') // <-- UPDATED LINE
         .in('id', matchIds);
+    // --- END OF FIX ---
 
     if (matchesError || !userMatches || userMatches.length === 0) {
         currentSelectedMatchId = null;
