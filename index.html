@@ -13,7 +13,6 @@
    <header>
     <div class="container nav-container">
         <div class="nav-left">
-            <!-- THIS IS THE FIX: The <a> tag is now a <div> -->
             <div id="logo">OSFTSB</div>
         </div>
         <nav id="main-nav">
@@ -40,7 +39,6 @@
 </header>
 <div id="picks-reminder-banner" class="picks-reminder-banner hidden">
     <div class="container">
-        <!-- The <p> tag is now an <a> tag -->
         <a href="#picks" class="reminder-link-button">Make your picks for the week!</a>
     </div>
 </div>
@@ -110,36 +108,37 @@
 
         <!-- Scoreboard Page -->
         <section id="scoreboard-page" class="page">
-    <h1>Scoreboard</h1>
+    <h1>Dashboard</h1>
     <div class="card">
-        <!-- This container holds the title and toggle buttons -->
         <div class="scoreboard-header-controls">
             <h2 id="scoreboard-match-name">Match Standings</h2>
             <div class="view-toggle-buttons">
-                <button id="show-chart-btn" class="toggle-btn active">Chart</button>
-                <button id="show-table-btn" class="toggle-btn">Table</button>
+                <button id="show-chart-btn" class="toggle-btn">Chart</button>
+                <button id="show-table-btn" class="toggle-btn active">Table</button>
+                <button id="show-payout-btn" class="toggle-btn">$</button>
             </div>
         </div>
 
-        <!-- This is the container for the chart -->
-        <div id="chart-view" class="chart-container">
+        <div id="chart-view" class="chart-container hidden">
             <canvas id="score-chart"></canvas>
         </div>
 
-        <!-- This is the container for the new scores table -->
-        <div id="table-view" class="run-sheet-container hidden">
+        <div id="table-view" class="run-sheet-container">
             <table id="player-scores-table" class="run-sheet-table">
                 <!-- This table is populated by JS -->
             </table>
+        </div>
+
+        <div id="payout-view" class="run-sheet-container hidden">
+            <!-- This new container will be populated by JS -->
         </div>
     </div>
     
     <div class="card">
     <div class="scoreboard-header-controls">
         <h2><span id="scoreboard-week-title"></span> Live Scores</h2>
-        <div class="run-sheet-controls"> <!-- New wrapper div -->
+        <div class="run-sheet-controls">
             <select id="run-sheet-week-selector"></select>
-            <!-- THIS IS THE NEW REFRESH BUTTON -->
             <button id="refresh-run-sheet-btn" class="icon-button" title="Refresh Scores">
                 <svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 0 24 24" width="24px" fill="#555"><path d="M0 0h24v24H0V0z" fill="none"/><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
             </button>
@@ -203,7 +202,6 @@
     </main>
    <div id="floating-save-container" class="hidden">
     <div class="floating-save-inner">
-        <!-- THIS IS THE NEW STRUCTURE FOR THE COUNTER -->
         <div id="picks-counter">
             <span class="counter-label">Picks: </span>
             <span id="counter-value">0</span>
