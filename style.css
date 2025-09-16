@@ -48,7 +48,6 @@ header { background-color: var(--primary-color); color: white; padding: 0.5rem 0
 .hamburger { display: none; flex-direction: column; gap: 5px; cursor: pointer; background: none; border: none; padding: 5px; }
 .hamburger-line { width: 25px; height: 3px; background-color: white; border-radius: 3px; transition: transform 0.3s; }
 
-/* *** NEW: Style for avatar in the header *** */
 .header-avatar {
     width: 32px;
     height: 32px;
@@ -72,7 +71,7 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 .auth-form button { padding: 12px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; font-size: 1.1rem; cursor: pointer; transition: background-color 0.3s; }
 .auth-form button:hover { background-color: var(--secondary-color); }
 
-/* --- *** NEW: Profile Form Styles *** --- */
+/* --- Profile Form Styles --- */
 #profile-form {
     display: flex;
     flex-direction: column;
@@ -120,7 +119,7 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 }
 
 
-/* --- Home Page / Dashboard Styles are unchanged --- */
+/* --- Home Page / Dashboard Styles --- */
 .pick-history-table { width: 100%; border-collapse: collapse; }
 .pick-history-table th, .pick-history-table td { padding: 12px; text-align: center; border-bottom: 1px solid #ddd; }
 .pick-history-table th { background-color: #f2f2f2; }
@@ -164,35 +163,64 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
 .odds-info {
     font-weight: 600;
     color: var(--secondary-color);
-    margin-left: 5px; /* Adds a little space after the separator */
+    margin-left: 5px;
 }
 
-/* --- Matches & Scoreboard Styles (Unchanged) --- */
+/* --- Matches Page Styles --- */
 #matches-list-container .match-item { display: flex; justify-content: space-between; align-items: center; padding: 15px; border-bottom: 1px solid #eee; }
 #matches-list-container .match-item:last-child { border-bottom: none; }
 .match-item span { font-weight: 600; font-size: 1.1rem; }
 .button-primary { padding: 8px 16px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; font-size: 1rem; cursor: pointer; transition: background-color 0.3s; }
 .button-primary:hover { background-color: var(--secondary-color); }
-#scoreboard-picks-container { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-.scoreboard-user-picks { border: 1px solid #e0e0e0; border-radius: var(--border-radius); padding: 15px; }
-.scoreboard-user-picks h3 { margin-top: 0; border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; }
-.scoreboard-user-picks ul { list-style: none; padding: 0; margin: 0; }
-.scoreboard-user-picks li { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
-.scoreboard-user-picks li span:first-child { font-weight: 500; }
-.scoreboard-user-picks li .wager-indicator { font-weight: bold; color: var(--primary-color); }
 
-/* --- Scoreboard Chart Styles --- */
+
+/* --- Scoreboard & Toggles --- */
 .chart-container {
     position: relative;
     height: 300px;
     width: 100%;
 }
 
-/* =================================================================
-   *** MODIFIED: RUN SHEET TABLE STYLES ***
-   ================================================================= */
+.view-toggle-buttons {
+    display: flex;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow: hidden;
+}
 
-/* Container enables horizontal scrolling on small screens */
+.toggle-btn {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    background-color: #f0f0f0;
+    color: var(--text-color);
+    border: none;
+    border-left: 1px solid #ccc;
+    transition: background-color 0.2s;
+}
+
+.toggle-btn:first-child {
+    border-left: none;
+}
+
+.toggle-btn:hover {
+    background-color: #e0e0e0;
+}
+
+.toggle-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+}
+
+/* --- THIS IS THE FIX (Part 1): Global styles for the icons --- */
+.toggle-icon {
+    display: none; /* Icons are hidden on desktop */
+    fill: currentColor; /* SVG color will match the button's text color */
+}
+
+
+/* --- Run Sheet Table --- */
 .run-sheet-container {
     width: 100%;
     overflow-x: auto; 
@@ -205,25 +233,17 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     table-layout: fixed;
 }
 
-.run-sheet-table th {
+.run-sheet-table th, .run-sheet-table td {
     border: 1px solid #ddd;
     padding: 8px;
     text-align: center;
     font-size: 0.8rem;
     word-wrap: break-word;
-    min-width: 90px; /* NEW: Minimum width for player columns */
+    min-width: 90px;
     position: -webkit-sticky;
     position: sticky;
     top: 0;
     z-index: 3;
-}
-.run-sheet-table td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: center;
-    font-size: 0.8rem;
-    word-wrap: break-word;
-    min-width: 90px; /* NEW: Minimum width for player columns */
 }
 
 .run-sheet-table th {
@@ -233,22 +253,19 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     padding: 12px 8px;
 }
 
-/* NEW: Sticky positioning for the first column (header and body) */
 .run-sheet-table thead th:first-child,
 .run-sheet-table tbody td:first-child {
-    position: -webkit-sticky; /* For Safari */
+    position: -webkit-sticky;
     position: sticky;
     left: 0;
-    z-index: 1; /* Ensures it stays above other cells during scroll */
+    z-index: 1;
 }
 
-/* MODIFIED: Set a fixed width and background for the sticky "Game" column header */
 .run-sheet-table th:first-child {
     width: 50px; 
     min-width: 50px;
 }
 
-/* MODIFIED: Set a fixed width and background for the sticky "Game" column cells */
 .run-sheet-table .game-matchup-cell {
     text-align: left;
     font-weight: 500;
@@ -257,7 +274,7 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     min-width: 150px;
     padding: 5px;
     vertical-align: middle;
-    position: relative; /* This line should already be here */
+    position: relative;
 }
 
 .pick-content-wrapper {
@@ -272,23 +289,18 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     height: var(--run-sheet-logo-size);
 }
 
-/* Wager Background Color Classes */
 .wager-1 { background-color: #f5f5f5; }
 .wager-2 { background-color: #e0e0e0; }
 .wager-3 { background-color: #9e9e9e; }
 .wager-4 { background-color: #616161; color: white; }
 .wager-5 { background-color: #212121; color: white; }
 
-/* Locked Pick Style */
 .locked-pick {
     background-color: #f0f0f0;
     color: #aaa;
 }
-.locked-pick i {
-    font-style: normal;
-}
+.locked-pick i { font-style: normal; }
 
-/* Flex container for each team's info (logo, name, score) */
 .matchup-team-container {
     display: flex;
     align-items: center;
@@ -316,7 +328,7 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     border-radius: 15%;
 }
 
-/* --- Other Styles --- */
+/* --- Other Component Styles --- */
 .button-secondary {
     padding: 8px 16px;
     background-color: #e0e0e0;
@@ -399,132 +411,12 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     border-left: 4px solid var(--accent-color);
 }
 
-
-/* =================================================================
-   *** RESPONSIVE STYLES (for Mobile) ***
-   ================================================================= */
-@media (max-width: 768px) {
-    .container { padding: 10px; }
-    h1 { font-size: 1.5rem; }
-
-    /* Header & Navigation */
-    .nav-container { flex-wrap: wrap; }
-    .nav-left { flex-direction: column; align-items: flex-start; gap: 5px; }
-    #logo { padding: 0; }
-    #user-status { order: 3; }
-    .hamburger { display: flex; order: 2; }
-    #main-nav {
-        display: none;
-        order: 4;
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        width: 100%;
-        background-color: var(--primary-color);
-        box-shadow: var(--box-shadow);
-        z-index: 1000;
-    }
-    #main-nav.nav-open { display: block; }
-    #main-nav ul { flex-direction: column; width: 100%; }
-    #main-nav li { width: 100%; text-align: left; }
-    #main-nav .nav-link { display: block; padding: 15px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
-    #main-nav .nav-link:hover { background-color: var(--secondary-color); }
-
-    /* Other Mobile Adjustments */
-    .auth-form-container { flex-direction: column; }
-    .team img { width: 45px; height: 45px; }
-    .team-name { font-size: 0.9rem; }
-    .wager-controls { flex-direction: column; gap: 15px; }
-    .pick-history-table { font-size: 0.9rem; }
-    .pick-history-table th, .pick-history-table td { padding: 8px 5px; }
-    .pick-history-table .team-name-text { display: none; }
-    .pick-history-table .team-logo-display { display: flex; }
-
-    /* Run Sheet mobile adjustments */
-    .run-sheet-table th,
-    .run-sheet-table td {
-        font-size: 0.7rem;
-        padding: 6px 4px;
-        min-width: 75px; /* MODIFIED: Smaller min-width for player columns on mobile */
-    }
-    .run-sheet-table .game-matchup-cell,
-    .run-sheet-table th:first-child {
-        width: 60px; /* MODIFIED: Slightly smaller fixed width for the game column on mobile */
-        min-width: 60px;
-    }
-
-    #global-selector-container {
-        order: 4;
-        width: 100%;
-        margin-top: 10px;
-        margin-right: 0;
-    }
-    #global-match-selector { width: 100%; }
-
-    /* *** NEW: Profile form mobile adjustments *** */
-    .profile-form-grid {
-        grid-template-columns: 1fr; /* Stack avatar and inputs */
-        gap: 15px;
-    }
-    #save-profile-btn {
-        width: 100%;
-    }
-    /* --- THIS IS THE FIX: Hides the "Welcome, Kev" text on mobile --- */
-    .welcome-message-text {
-        display: none;
-    }
-
-    /* This ensures the user profile link and logout button are spaced correctly on mobile */
-    #user-status {
-        gap: 5px;
-    }
-    
-}
-/* In style.css, add these new styles. You can place them near your other scoreboard styles. */
-
-
-
-/* Styling for the new toggle button container */
-.view-toggle-buttons {
-    display: flex;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    overflow: hidden; /* Ensures the border-radius is applied to children */
-}
-
-.toggle-btn {
-    padding: 8px 16px;
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    background-color: #f0f0f0;
-    color: var(--text-color);
-    border: none;
-    border-left: 1px solid #ccc;
-    transition: background-color 0.2s;
-}
-
-.toggle-btn:first-child {
-    border-left: none; /* Remove border from the first button */
-}
-
-.toggle-btn:hover {
-    background-color: #e0e0e0;
-}
-
-/* Style for the active/selected toggle button */
-.toggle-btn.active {
-    background-color: var(--primary-color);
-    color: white;
-}
-
-/* Player Scores Table Specific Styles */
+/* --- More Scoreboard Styles --- */
 #player-scores-table th:first-child,
 #player-scores-table td:first-child {
     font-weight: bold;
     text-align: left;
-    width: 120px; /* Give the player name column a bit more space */
+    width: 120px;
     min-width: 120px;
 }
 
@@ -533,57 +425,39 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     background-color: #f5f5f5;
 }
 #player-scores-table .total-score-col-header {
-    color: #333 !important; /* Makes the header text dark */
-}
-
-/* --- Game Situation Tooltip Styles --- */
-.run-sheet-table .game-matchup-cell {
-    position: relative; /* This is crucial for positioning the tooltip inside */
+    color: #333 !important;
 }
 
 .game-situation-tooltip {
-    /* Initially hidden */
     visibility: hidden;
     opacity: 0;
-    
-    /* Appearance */
     background-color: #333;
     color: #fff;
     border-radius: 6px;
     padding: 8px 12px;
-    
-    /* --- THIS IS THE CORRECTED POSITIONING LOGIC --- */
     position: absolute;
     z-index: 100;
-    bottom: 105%; /* Position above the cell */
-    left: 0;       /* Align to the left edge of the cell, not the center */
-    
-    /* Sizing and Text */
+    bottom: 105%;
+    left: 0;
     width: 260px;
     white-space: normal;
     text-align: left;
     font-size: 0.9rem;
     line-height: 1.4;
-    
     transition: opacity 0.2s;
 }
 
-/* This creates the little triangle arrow below the tooltip */
 .game-situation-tooltip::after {
     content: "";
     position: absolute;
     top: 100%;
-    /* --- THIS IS THE FIX --- */
-    left: 30px; /* Changed from 50% to a fixed value from the left */
-    /* --- END OF FIX --- */
+    left: 30px;
     margin-left: -5px;
     border-width: 5px;
     border-style: solid;
     border-color: #333 transparent transparent transparent;
 }
 
-/* --- SHOW the tooltip on hover --- */
-/* This is the magic rule: when you hover the row, the tooltip inside becomes visible */
 .run-sheet-table .game-row.in-progress:hover .game-matchup-cell .game-situation-tooltip {
     visibility: visible;
     opacity: 1;
@@ -601,13 +475,12 @@ main { padding-top: 20px; position: relative; z-index: 5; transition: transform 
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 15px; /* Adds some space between title and selector */
+    gap: 15px;
 }
 
-/* This is the key change */
 .scoreboard-header-controls h2 {
-    flex-grow: 1; /* Pushes the selector to the right */
-    margin-bottom: 0; /* Removes default margin to help alignment */
+    flex-grow: 1;
+    margin-bottom: 0;
 }
 canvas {
     max-height: 350px;
@@ -621,21 +494,18 @@ canvas {
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
 }
 
-/* A wrapper to help align content in table cells */
 .player-cell, .player-header {
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 8px; /* Adds space between avatar and name */
+    gap: 8px;
     height: 100%;
 }
 
-/* Specifically for the main standings table */
 #player-scores-table .player-cell {
-    justify-content: flex-start; /* Aligns content to the left */
+    justify-content: flex-start;
 }
 
-/* Styles for avatars in the "Standings" table */
 .table-avatar {
     width: 28px;
     height: 28px;
@@ -644,14 +514,13 @@ canvas {
     background-color: #f0f0f0;
 }
 
-/* Styles for avatars in the "Live Scores" grid header */
 .run-sheet-avatar {
     width: 28px;
     height: 28px;
     border-radius: 50%;
     object-fit: cover;
     background-color: #f0f0f0;
-    border: 2px solid rgba(255, 255, 255, 0.5); /* Adds a subtle border */
+    border: 2px solid rgba(255, 255, 255, 0.5);
 }
 
 .team-container {
@@ -659,13 +528,12 @@ canvas {
     grid-row: 1; 
 }
 
-/* Base styles for ALL info tabs */
 .info-tab {
     position: absolute;
     top: -5px;
     width: 24px;
     height: 24px;
-    background-color: var(--secondary-color); /* Red tab color */
+    background-color: var(--secondary-color);
     color: white;
     border-radius: 50%;
     display: flex;
@@ -681,17 +549,14 @@ canvas {
 }
 
 .info-tab:hover {
-    background-color: var(--primary-color); /* Blue on hover */
+    background-color: var(--primary-color);
     transform: scale(1.1);
 }
 
-/* --- THIS IS THE FIX --- */
-/* Position the AWAY team's tab on the LEFT */
 .away-team-container .info-tab {
     left: -10px;
 }
 
-/* Position the HOME team's tab on the RIGHT */
 .home-team-container .info-tab {
     right: -10px;
 }
@@ -705,13 +570,12 @@ canvas {
     background-color: rgba(0, 0, 0, 0.6);
     display: flex;
     justify-content: center;
-    /* --- THIS IS THE FIX --- */
-    align-items: flex-start; /* Position from the TOP, not the center */
-    padding-top: 10vh;       /* Push it 10% down from the top of the viewport */
+    align-items: flex-start;
+    padding-top: 10vh;
     z-index: 2000;
     opacity: 1;
     transition: opacity 0.3s ease;
-    overflow-y: auto; /* Allow the overlay itself to scroll on very small screens */
+    overflow-y: auto;
 }
 
 .modal-overlay.hidden {
@@ -729,7 +593,6 @@ canvas {
     position: relative;
     transform: translateY(0);
     transition: transform 0.3s ease;
-    /* Remove max-height and overflow from here as the parent handles it */
 }
 
 .modal-overlay.hidden .modal-content {
@@ -757,12 +620,13 @@ canvas {
     white-space: pre-wrap;
     word-break: break-word;
     margin-bottom: 0;
-    /* Ensure text has room to breathe and doesn't get clipped */
     overflow-wrap: break-word;
 }
 #modal-link-container {
     margin-top: 20px;
-    text-align: right; /* Aligns button to the right */
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
 .modal-link-button {
@@ -779,27 +643,21 @@ canvas {
 .modal-link-button:hover {
     background-color: var(--secondary-color);
 }
-#modal-link-container {
-    margin-top: 20px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px; /* Adds space between the buttons */
-}
 .user-profile-link {
     display: flex;
     align-items: center;
-    gap: 10px; /* Space between avatar and text */
+    gap: 10px;
 }
-/* This is the new container for the floating button */
+
 #floating-save-container {
-    position: fixed; /* This is what makes it float */
+    position: fixed;
     bottom: 0;
     left: 0;
     width: 100%;
     padding: 15px 20px;
     background-color: rgba(255, 255, 255, 0.95);
     box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
-    z-index: 100; /* Ensures it stays on top of other elements */
+    z-index: 100;
     box-sizing: border-box;
     display: flex;
     justify-content: center;
@@ -808,55 +666,39 @@ canvas {
 .floating-save-inner {
     display: flex;
     align-items: center;
-    gap: 20px; /* Adds space between the counter and the button */
+    gap: 20px;
     width: 100%;
-    max-width: 960px; /* Ensures alignment with the main page content */
+    max-width: 960px;
 }
 
-/* Style for the new counter element */
 #picks-counter {
     font-size: 1rem;
     font-weight: 600;
     color: var(--text-color);
     white-space: nowrap;
-    
-    /* New styling for the pill shape */
     background-color: #f0f0f0;
     padding: 6px 12px;
-    border-radius: 20px; /* This creates the rounded pill shape */
+    border-radius: 20px;
     border: 1px solid #ddd;
     transition: background-color 0.3s;
-    
-    /* Apply the animation here */
     animation: pulse-red 2.5s infinite;
 }
 
-/* Updated styles for the button itself */
 .save-picks-btn {
     width: 100%;
-    max-width: 960px; /* Ensures it doesn't get wider than the main content */
+    max-width: 960px;
     flex-grow: 1;
-    margin: 0; /* Removes any default margin */
+    margin: 0;
 }
 
-/* This adds space at the bottom of the game list so the floating button doesn't cover the last game card */
 #games-container {
     padding-bottom: 120px; 
 }
 
 @keyframes pulse-red {
-  0% {
-    /* The shadow starts with 0 size and 50% opacity */
-    box-shadow: 0 0 0 0 rgba(213, 10, 10, 0.5);
-  }
-  70% {
-    /* The shadow expands to 12px and fades out */
-    box-shadow: 0 0 0 12px rgba(213, 10, 10, 0);
-  }
-  100% {
-    /* The animation ends where it began */
-    box-shadow: 0 0 0 0 rgba(213, 10, 10, 0);
-  }
+  0% { box-shadow: 0 0 0 0 rgba(213, 10, 10, 0.5); }
+  70% { box-shadow: 0 0 0 12px rgba(213, 10, 10, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(213, 10, 10, 0); }
 }
 
 .logout-icon-btn {
@@ -904,54 +746,42 @@ canvas {
     opacity: 0.5;
 }
 
-/* Style for the new total row in the run sheet */
-.run-sheet-table tfoot .total-row td {
-    font-weight: bold;
-    background-color: #f2f2f2;
-    position: -webkit-sticky;
-    position: sticky;
-    bottom: 0;
-    z-index: 2; /* Ensures it stays on top of content when scrolling vertically */
-    box-shadow: 0 -2px 5px rgba(0,0,0,0.1);
-}
-
 .weekly-total-row td {
     position: -webkit-sticky;
     position: sticky;
-    top: 48px; /* Position it just below the header (adjust if header height changes) */
+    top: 48px;
     z-index: 2;
-    
     background-color: #f2f2f2;
     font-weight: bold;
     font-size: 0.9rem;
-    padding: 4px 8px; /* This makes the row thin */
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Adds separation from content */
+    padding: 4px 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     border-bottom: 2px solid #ccc;
 }
 
-/* --- Payout View Specific Styles (Refined) --- */
+/* --- Payout View Styles --- */
 .payout-container {
     padding: 10px;
 }
 
 .payout-summary {
     text-align: center;
-    padding: 18px; /* Scaled down padding */
+    padding: 18px;
     background-color: #f4f6f8;
     border-radius: var(--border-radius);
-    margin-bottom: 20px; /* Reduced space */
+    margin-bottom: 20px;
     border: 1px solid #e0e0e0;
 }
 
 .payout-summary h3 {
     margin: 0 0 8px 0;
-    font-size: 1.1rem; /* Scaled down */
+    font-size: 1.1rem;
     color: var(--text-color);
     font-weight: 500;
 }
 
 .payout-summary .prize-amount {
-    font-size: 2.2rem; /* Scaled down */
+    font-size: 2.2rem;
     font-weight: bold;
     color: var(--primary-color);
 }
@@ -962,13 +792,12 @@ canvas {
 }
 
 .payout-table td {
-    padding: 12px 10px; /* Reduced padding */
+    padding: 12px 10px;
     text-align: left;
     border-bottom: 1px solid #eee;
     vertical-align: middle;
 }
 
-/* New class for the "owes" column to make it distinct */
 .payout-table .owes-cell {
     text-align: center;
     color: #777;
@@ -977,11 +806,10 @@ canvas {
     padding: 12px 5px;
 }
 
-/* Align amount to the right */
 .payout-table td:last-child {
     text-align: right;
     font-weight: bold;
-    font-size: 1rem; /* Scaled down */
+    font-size: 1rem;
 }
 
 .payout-table .player-cell {
@@ -989,8 +817,96 @@ canvas {
     font-weight: 500;
 }
 
-/* --- Payout View MOBILE Styles (iOS Inspired) --- */
+/* =================================================================
+   *** RESPONSIVE STYLES (for Mobile) ***
+   ================================================================= */
 @media (max-width: 600px) {
+    .container { padding: 10px; }
+    h1 { font-size: 1.5rem; }
+
+    .nav-container { flex-wrap: wrap; }
+    .nav-left { flex-direction: column; align-items: flex-start; gap: 5px; }
+    #logo { padding: 0; }
+    #user-status { order: 3; }
+    .hamburger { display: flex; order: 2; }
+    #main-nav {
+        display: none;
+        order: 4;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        width: 100%;
+        background-color: var(--primary-color);
+        box-shadow: var(--box-shadow);
+        z-index: 1000;
+    }
+    #main-nav.nav-open { display: block; }
+    #main-nav ul { flex-direction: column; width: 100%; }
+    #main-nav li { width: 100%; text-align: left; }
+    #main-nav .nav-link { display: block; padding: 15px 20px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+    #main-nav .nav-link:hover { background-color: var(--secondary-color); }
+
+    .auth-form-container { flex-direction: column; }
+    .team img { width: 45px; height: 45px; }
+    .team-name { font-size: 0.9rem; }
+    .wager-controls { flex-direction: column; gap: 15px; }
+    .pick-history-table { font-size: 0.9rem; }
+    .pick-history-table th, .pick-history-table td { padding: 8px 5px; }
+    .pick-history-table .team-name-text { display: none; }
+    .pick-history-table .team-logo-display { display: flex; }
+
+    .run-sheet-table th,
+    .run-sheet-table td {
+        font-size: 0.7rem;
+        padding: 6px 4px;
+        min-width: 75px;
+    }
+    .run-sheet-table .game-matchup-cell,
+    .run-sheet-table th:first-child {
+        width: 60px;
+        min-width: 60px;
+    }
+
+    #global-selector-container {
+        order: 4;
+        width: 100%;
+        margin-top: 10px;
+        margin-right: 0;
+    }
+    #global-match-selector { width: 100%; }
+
+    .profile-form-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    #save-profile-btn {
+        width: 100%;
+    }
+    .welcome-message-text {
+        display: none;
+    }
+    #user-status {
+        gap: 5px;
+    }
+    
+    /* --- THIS IS THE FIX (Part 2): Responsive styles for the icons --- */
+    .view-toggle-buttons {
+        flex-shrink: 0; 
+    }
+    .toggle-btn:has(.toggle-icon) .toggle-text {
+        display: none;
+    }
+    .toggle-btn .toggle-icon {
+        display: block;
+    }
+    .toggle-btn {
+        padding: 8px 12px;
+        min-width: 40px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
     .payout-table {
         border-top: 1px solid #eee;
     }
@@ -1021,28 +937,25 @@ canvas {
             "payer arrow payee"
             "amount amount amount";
         gap: 4px 10px;
-        align-items: center; /* Vertically align the items in the top row */
+        align-items: center;
     }
     
-    /* --- THIS IS THE FIX --- */
-    /* Assign grid areas AND specific alignment for payer/payee */
     .payout-table td:nth-of-type(1) { 
         grid-area: payer;
-        justify-content: flex-end; /* Align Payer to the RIGHT */
+        justify-content: flex-end;
     }
     .payout-table td:nth-of-type(2) { 
         grid-area: arrow;
-        justify-content: center; /* Ensure arrow is centered */
+        justify-content: center;
     }
     .payout-table td:nth-of-type(3) { 
         grid-area: payee;
-        justify-content: flex-start; /* Align Payee to the LEFT */
+        justify-content: flex-start;
     }
     .payout-table td:nth-of-type(4) { 
         grid-area: amount;
-        justify-content: center; /* Center the amount */
+        justify-content: center;
     }
-    /* --- END OF FIX --- */
 
     .payout-table .player-cell {
         font-size: 1rem;
@@ -1059,28 +972,4 @@ canvas {
         padding-top: 8px;
         color: var(--primary-color);
     }
-     .toggle-text {
-        display: none; /* Hide text on mobile */
-    }
-    /* Hide the text label inside any button that has an icon */
-    .toggle-btn:has(.toggle-icon) .toggle-text {
-        display: none;
-    }
-    
-    /* Show the icon inside any button that has one */
-    .toggle-btn .toggle-icon {
-        display: block;
-    }
-
-    .toggle-btn {
-        padding: 8px 12px;
-        min-width: 40px; /* Give buttons a minimum width to prevent collapsing */
-        display: flex;
-        justify-content: center;
-        align-items: center;
-    }
-}
-.toggle-icon {
-    display: none; /* Icons are hidden by default on desktop */
-    fill: currentColor; /* Make the SVG color inherit from the button's text color */
 }
