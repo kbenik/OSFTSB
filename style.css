@@ -928,3 +928,135 @@ canvas {
     box-shadow: 0 2px 5px rgba(0,0,0,0.1); /* Adds separation from content */
     border-bottom: 2px solid #ccc;
 }
+
+/* --- Payout View Specific Styles (Refined) --- */
+.payout-container {
+    padding: 10px;
+}
+
+.payout-summary {
+    text-align: center;
+    padding: 18px; /* Scaled down padding */
+    background-color: #f4f6f8;
+    border-radius: var(--border-radius);
+    margin-bottom: 20px; /* Reduced space */
+    border: 1px solid #e0e0e0;
+}
+
+.payout-summary h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.1rem; /* Scaled down */
+    color: var(--text-color);
+    font-weight: 500;
+}
+
+.payout-summary .prize-amount {
+    font-size: 2.2rem; /* Scaled down */
+    font-weight: bold;
+    color: var(--primary-color);
+}
+
+.payout-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.payout-table td {
+    padding: 12px 10px; /* Reduced padding */
+    text-align: left;
+    border-bottom: 1px solid #eee;
+    vertical-align: middle;
+}
+
+/* New class for the "owes" column to make it distinct */
+.payout-table .owes-cell {
+    text-align: center;
+    color: #777;
+    font-size: 0.9rem;
+    font-style: italic;
+    padding: 12px 5px;
+}
+
+/* Align amount to the right */
+.payout-table td:last-child {
+    text-align: right;
+    font-weight: bold;
+    font-size: 1rem; /* Scaled down */
+}
+
+.payout-table .player-cell {
+    justify-content: flex-start;
+    font-weight: 500;
+}
+
+/* --- Payout View MOBILE Styles (iOS Inspired) --- */
+@media (max-width: 600px) {
+    .payout-table {
+        border-top: 1px solid #eee;
+    }
+
+    .payout-table tbody,
+    .payout-table tr,
+    .payout-table td {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .payout-table tr {
+        padding: 12px 0;
+    }
+
+    .payout-table td {
+        border: none;
+        padding: 4px 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .payout-table tr {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        grid-template-areas:
+            "payer arrow payee"
+            "amount amount amount";
+        gap: 4px 10px;
+        align-items: center; /* Vertically align the items in the top row */
+    }
+    
+    /* --- THIS IS THE FIX --- */
+    /* Assign grid areas AND specific alignment for payer/payee */
+    .payout-table td:nth-of-type(1) { 
+        grid-area: payer;
+        justify-content: flex-end; /* Align Payer to the RIGHT */
+    }
+    .payout-table td:nth-of-type(2) { 
+        grid-area: arrow;
+        justify-content: center; /* Ensure arrow is centered */
+    }
+    .payout-table td:nth-of-type(3) { 
+        grid-area: payee;
+        justify-content: flex-start; /* Align Payee to the LEFT */
+    }
+    .payout-table td:nth-of-type(4) { 
+        grid-area: amount;
+        justify-content: center; /* Center the amount */
+    }
+    /* --- END OF FIX --- */
+
+    .payout-table .player-cell {
+        font-size: 1rem;
+    }
+    
+    .payout-table .owes-cell {
+        font-style: normal;
+        font-size: 1.5rem;
+        color: #aaa;
+    }
+
+    .payout-table td:last-child {
+        font-size: 1.5rem;
+        padding-top: 8px;
+        color: var(--primary-color);
+    }
+}
