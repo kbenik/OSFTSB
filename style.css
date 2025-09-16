@@ -1059,4 +1059,28 @@ canvas {
         padding-top: 8px;
         color: var(--primary-color);
     }
+     .toggle-text {
+        display: none; /* Hide text on mobile */
+    }
+    /* Hide the text label inside any button that has an icon */
+    .toggle-btn:has(.toggle-icon) .toggle-text {
+        display: none;
+    }
+    
+    /* Show the icon inside any button that has one */
+    .toggle-btn .toggle-icon {
+        display: block;
+    }
+
+    .toggle-btn {
+        padding: 8px 12px;
+        min-width: 40px; /* Give buttons a minimum width to prevent collapsing */
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+}
+.toggle-icon {
+    display: none; /* Icons are hidden by default on desktop */
+    fill: currentColor; /* Make the SVG color inherit from the button's text color */
 }
