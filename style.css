@@ -638,6 +638,10 @@ canvas {
     border-radius: var(--border-radius);
     font-weight: 500;
     transition: background-color 0.3s;
+    border: none;
+    font-family: inherit;
+    font-size: 0.9rem; /* Matches other button font sizes */
+    cursor: pointer;
 }
 
 .modal-link-button:hover {
@@ -972,4 +976,114 @@ canvas {
         padding-top: 8px;
         color: var(--primary-color);
     }
+}
+
+/* This targets the container for the new Stats functionality */
+#modal-stats-container {
+    margin-top: 15px;
+    border-top: 1px solid #eee;
+    padding-top: 15px;
+}
+
+/* This is the dropdown container that holds the category buttons */
+#modal-stats-dropdown {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+/* This styles the individual category buttons (e.g., "Passing", "Rushing") */
+.stats-category-btn {
+    background-color: #f0f0f0;
+    border: 1px solid #ccc;
+    padding: 6px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+
+.stats-category-btn:hover {
+    background-color: #e0e0e0;
+    border-color: #bbb;
+}
+
+/* Style for the currently active category button */
+.stats-category-btn.active {
+    background-color: var(--primary-color);
+    color: white;
+    border-color: var(--primary-color);
+}
+
+/* This is the container where the stats table or loading message will appear */
+#modal-stats-output {
+    margin-top: 15px;
+    max-height: 200px; /* Limit the height to prevent a giant modal */
+    overflow-y: auto;  /* Add a scrollbar if the content overflows */
+    padding-right: 10px; /* Space for the scrollbar */
+}
+
+/* The table that displays the stats */
+.stats-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.stats-table td {
+    padding: 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+/* Style for the stat name (e.g., "Passing Yards") */
+.stats-table td:first-child {
+    font-weight: 500;
+    color: #555;
+    text-align: left;
+}
+
+/* Style for the stat value (e.g., "947") */
+.stats-table td:last-child {
+    font-weight: bold;
+    text-align: right;
+    color: var(--primary-color);
+}
+.stat-rank {
+    font-size: 0.8em;
+    font-weight: 500;
+    color: #777;
+    margin-left: 6px;
+    vertical-align: middle;
+}
+
+/* This keyframe animation creates the pulsing glow effect */
+@keyframes glowing-border {
+  0% {
+    box-shadow: 0 0 3px rgba(0, 112, 221, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 12px rgba(0, 112, 221, 1);
+  }
+  100% {
+    box-shadow: 0 0 3px rgba(0, 112, 221, 0.7);
+  }
+}
+
+/* Apply the animation and initial styles to the Stats button */
+#stats-toggle-btn {
+  /* Set the font-weight to match the other buttons */
+  font-weight: 500; 
+  
+  /* Add a border and apply the glowing animation */
+  border: 1px solid #007bff;
+  animation: glowing-border 2.5s infinite ease-in-out;
+}
+
+/* NEW style to keep the "Stats" button highlighted when its dropdown is open */
+#stats-toggle-btn.active {
+  background-color: var(--secondary-color); /* Use the red color to show it's active */
+  animation: none; /* Pause the glow when active to reduce distraction */
+  border-color: transparent;
+  box-shadow: none;
 }
