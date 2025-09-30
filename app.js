@@ -1835,6 +1835,17 @@ function setupEventListeners() {
     document.getElementById('profile-avatar-url').addEventListener('input', (e) => {
         updateAvatarPreview(e.target.value);
     });
+
+    // --- FIX #1: THE GLOBAL CONNECTION FIX ---
+    // This listener solves the "nothing happens" issue after returning to the tab.
+    // It wakes up the Supabase connection for the entire application as soon as the tab becomes visible again.
+    // This ensures that any subsequent action (like fetching stats or saving picks) will use a live connection.
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            supabase.auth.getSession();
+        }
+    });
+
     hamburgerBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         mainNav.classList.toggle('nav-open');
@@ -1849,8 +1860,6 @@ function setupEventListeners() {
             const teamName = e.target.dataset.teamName;
             const info = teamInfo[teamName];
             if (info) {
-                // --- THIS IS THE FIX ---
-                // The third argument (info.DepthChart) is now correctly passed to the function.
                 showInfoPopup(info.TeamName, info.AISummary, info.DepthChart, info.News);
             }
         }
@@ -1931,6 +1940,8 @@ function startApp() {
 
         // --- THE FIX ---
         // We now handle the event that occurs when you return to a sleeping tab.
+        // The 'visibilitychange' listener triggers a getSession(), which in turn triggers
+        // this handler with the 'TOKEN_REFRESHED' event.
         if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
             
             // Call our new reusable function to set up everything
@@ -1966,6 +1977,11 @@ function getOrdinalSuffix(i) {
 }
 
 async function displayTeamStatsForCategory(teamId, category) {
+    // --- THIS IS THE FIX ---
+    // By placing this here, we guarantee the connection to Supabase is "awake" and authenticated
+    // right before we make the RPC call, preventing the indefinite loading state when returning to the tab.
+    await supabase.auth.getSession();
+
     const outputDiv = document.getElementById('modal-stats-output');
     if (!outputDiv) return;
 
@@ -2029,111 +2045,102 @@ async function displayTeamStatsForCategory(teamId, category) {
 }
 
 function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) {
+    // 1. Find or create the modal element
     let modal = document.getElementById('info-modal');
     if (!modal) {
+        // If it doesn't exist, create the basic shell. This only happens once.
         modal = document.createElement('div');
         modal.id = 'info-modal';
         modal.className = 'modal-overlay hidden';
-        modal.innerHTML = `
-            <div class="modal-content">
-                <button class="modal-close-btn">&times;</button>
-                <h3 id="modal-team-name"></h3>
-                <p id="modal-summary"></p>
-                <div id="modal-link-container"></div>
-                <div id="modal-stats-container" style="display: none;">
-                    <div id="modal-stats-dropdown"></div>
-                    <div id="modal-stats-output"></div>
-                </div>
-            </div>
-        `;
         document.body.appendChild(modal);
     }
 
-    const summaryEl = document.getElementById('modal-summary');
-    const statsContainer = document.getElementById('modal-stats-container');
-    const linkContainer = document.getElementById('modal-link-container');
-    const statsDropdown = document.getElementById('modal-stats-dropdown');
-    const statsOutput = document.getElementById('modal-stats-output');
+    // 2. THIS IS THE CRITICAL FIX:
+    //    Wipe the modal's inner content completely clean. This ensures that NO old
+    //    event listeners or stale content from a previous team can possibly persist.
+    modal.innerHTML = `
+        <div class="modal-content">
+            <button class="modal-close-btn">&times;</button>
+            <h3 id="modal-team-name"></h3>
+            <div id="modal-summary-container">
+                <p id="modal-summary"></p>
+            </div>
+            <div id="modal-link-container"></div>
+            <div id="modal-stats-container" class="hidden">
+                <div id="modal-stats-dropdown"></div>
+                <div id="modal-stats-output"></div>
+            </div>
+        </div>
+    `;
+
+    // 3. Get references to the NEWLY created elements inside the modal
+    const summaryContainer = modal.querySelector('#modal-summary-container');
+    const statsContainer = modal.querySelector('#modal-stats-container');
+    const linkContainer = modal.querySelector('#modal-link-container');
+    const statsDropdown = modal.querySelector('#modal-stats-dropdown');
     const teamId = teamNameToIdMap.get(teamName);
 
-    // Populate static content and set initial state
-    document.getElementById('modal-team-name').textContent = teamName;
-    summaryEl.textContent = summary;
-    summaryEl.classList.remove('hidden');
-    statsContainer.style.display = 'none';
+    // 4. Populate the fresh elements with the current team's data
+    modal.querySelector('#modal-team-name').textContent = teamName;
+    modal.querySelector('#modal-summary').textContent = summary;
 
-    // --- FIX: Programmatically create buttons to ensure listeners work ---
-    linkContainer.innerHTML = ''; // Clear any old buttons
-
-    // Create Depth Chart link if URL exists
+    // Build the link buttons
     if (depthChartUrl) {
-        const depthChartLink = document.createElement('a');
-        depthChartLink.href = depthChartUrl;
-        depthChartLink.target = '_blank';
-        depthChartLink.rel = 'noopener noreferrer';
-        depthChartLink.className = 'modal-link-button';
-        depthChartLink.textContent = 'Depth Chart';
-        linkContainer.appendChild(depthChartLink);
+        linkContainer.innerHTML += `<a href="${depthChartUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">Depth Chart</a>`;
     }
-
-    // Create News link if URL exists
     if (newsUrl) {
-        const newsLink = document.createElement('a');
-        newsLink.href = newsUrl;
-        newsLink.target = '_blank';
-        newsLink.rel = 'noopener noreferrer';
-        newsLink.className = 'modal-link-button';
-        newsLink.textContent = 'News';
-        linkContainer.appendChild(newsLink);
+        linkContainer.innerHTML += `<a href="${newsUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">News</a>`;
     }
 
-    // Create the Stats/Summary toggle button
+    // 5. Create the toggle button and attach a NEW event handler for it
     const statsToggleBtn = document.createElement('button');
     statsToggleBtn.id = 'stats-toggle-btn';
     statsToggleBtn.className = 'modal-link-button';
-    statsToggleBtn.textContent = 'Stats'; // Initial text
+    statsToggleBtn.textContent = 'Stats';
 
-    const statsToggleHandler = () => {
-        const isShowingSummary = statsContainer.style.display === 'none';
+    statsToggleBtn.addEventListener('click', () => {
+        const isShowingSummary = statsContainer.classList.contains('hidden');
 
         if (isShowingSummary) {
-            // --- ACTION: Switch to Stats View ---
-            summaryEl.classList.add('hidden');
-            statsContainer.style.display = 'block';
+            // Switch to Stats view
+            summaryContainer.classList.add('hidden');
+            statsContainer.classList.remove('hidden');
             statsToggleBtn.classList.add('active');
             statsToggleBtn.innerHTML = `&larr; Summary`;
 
-            if (statsDropdown.innerHTML === '') {
-                statsDropdown.innerHTML = Object.keys(statMappings)
-                    .map(cat => `<button class="stats-category-btn" data-category="${cat}">${cat}</button>`)
-                    .join('');
+            // Build the category buttons with fresh listeners
+            statsDropdown.innerHTML = Object.keys(statMappings)
+                .map(cat => `<button class="stats-category-btn" data-category="${cat}">${cat}</button>`)
+                .join('');
 
-                statsDropdown.querySelectorAll('.stats-category-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        statsDropdown.querySelectorAll('.stats-category-btn').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                        displayTeamStatsForCategory(teamId, btn.dataset.category);
-                    });
+            statsDropdown.querySelectorAll('.stats-category-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    statsDropdown.querySelectorAll('.stats-category-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    // This now works reliably because it's a fresh listener with the correct teamId
+                    displayTeamStatsForCategory(teamId, btn.dataset.category);
                 });
+            });
+            // Automatically click 'General' to show stats right away
+            if (statsDropdown.querySelector('.stats-category-btn')) {
+                 statsDropdown.querySelector('.stats-category-btn').click();
             }
+
         } else {
-            // --- ACTION: Switch back to Summary View ---
-            statsContainer.style.display = 'none';
-            summaryEl.classList.remove('hidden');
+            // Switch back to Summary view
+            statsContainer.classList.add('hidden');
+            summaryContainer.classList.remove('hidden');
             statsToggleBtn.classList.remove('active');
             statsToggleBtn.textContent = 'Stats';
-
-            statsOutput.innerHTML = '';
-            statsDropdown.querySelectorAll('.stats-category-btn').forEach(b => b.classList.remove('active'));
         }
-    };
+    });
 
-    // Attach the listener directly to the button we just created
-    statsToggleBtn.addEventListener('click', statsToggleHandler);
-    linkContainer.appendChild(statsToggleBtn); // Add the button to the DOM
+    linkContainer.appendChild(statsToggleBtn);
 
+    // 6. Finally, show the fully rebuilt modal
     modal.classList.remove('hidden');
 }
+
 
 
 function hideInfoPopup() {
