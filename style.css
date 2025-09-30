@@ -570,12 +570,15 @@ canvas {
     background-color: rgba(0, 0, 0, 0.6);
     display: flex;
     justify-content: center;
-    align-items: flex-start;
-    padding-top: 10vh;
+    align-items: flex-start; /* Aligns the modal to the top */
     z-index: 2000;
     opacity: 1;
     transition: opacity 0.3s ease;
-    overflow-y: auto;
+    overflow-y: auto; /* This makes the entire overlay scrollable */
+
+    /* --- FIX: Replaced padding-top with overall padding --- */
+    padding: 20px 10px;
+    box-sizing: border-box; /* Ensures padding is included in the element's total width and height */
 }
 
 .modal-overlay.hidden {
@@ -621,7 +624,11 @@ canvas {
     word-break: break-word;
     margin-bottom: 0;
     overflow-wrap: break-word;
+    
+    /* --- FIX: Add this line to shrink the summary font size --- */
+    font-size: 0.9rem; 
 }
+
 #modal-link-container {
     margin-top: 20px;
     display: flex;
