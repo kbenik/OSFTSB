@@ -255,19 +255,65 @@ function updateUserStatusUI(userProfile) {
 }
 
 async function fetchGameData() {
-    const gameResponse = await fetch(`${SHEET_URL}&t=${new Date().getTime()}`);
-    const gameCsvText = await gameResponse.text();
-    allGames = parseCSV(gameCsvText); 
-    
-    // Recalculate team data in case logos have changed
-    allGames.forEach(game => {
-        if (game['Home Display Name'] && game['Home Logo']) {
-            teamData[game['Home Display Name']] = game['Home Logo'];
+    try {
+        // Step 1: Fetch all data from our new, fast 'game_data' table,
+        // asking the database to pre-sort it by kickoff time.
+        const { data, error } = await supabase
+            .from('game_data')
+            .select('*')
+            .order('kickoff', { ascending: true }); // Sorts all games chronologically
+
+        if (error) {
+            throw error; // If Supabase returns an error, we'll handle it below
         }
-        if (game['Away Display Name'] && game['Away Logo']) {
-            teamData[game['Away Display Name']] = game['Away Logo'];
-        }
-    });
+
+        // Step 2: Map the database columns (e.g., 'home_team_name') to the
+        // old property names your app expects (e.g., 'Home Team'). This ensures
+        // that no other part of your app needs to be changed.
+        allGames = data.map(game => ({
+            'Week': game.week,
+            'Date': new Date(game.kickoff).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'numeric', day: 'numeric' }),
+            'Time': new Date(game.kickoff).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+            'Away Team': game.away_team_name,
+            'Away': game.away_team_abbr,
+            'Home Team': game.home_team_name,
+            'Home': game.home_team_abbr,
+            'Away Score': game.away_score,
+            'Home Score': game.home_score,
+            'Qtr': game.period,
+            'Clock': game.display_clock,
+            'Situation': game.situation,
+            'Pos': game.possession_team,
+            'Status': game.status,
+            'Game Id': game.game_id,
+            'O/U': game.over_under,
+            'Odds': game.odds,
+            'Favored Team': game.favored_team,
+            'Spread': game.spread,
+            'Home Display Name': game.home_display_name,
+            'Away Display Name': game.away_display_name,
+            'Game Winner': game.game_winner,
+            'Game Loser': game.game_loser,
+            'Away Logo': game.away_logo,
+            'Home Logo': game.home_logo,
+        }));
+
+        // Step 3: This part of the logic remains the same. It builds the
+        // 'teamData' object that other functions rely on.
+        allGames.forEach(game => {
+            if (game['Home Display Name'] && game['Home Logo']) {
+                teamData[game['Home Display Name']] = game['Home Logo'];
+            }
+            if (game['Away Display Name'] && game['Away Logo']) {
+                teamData[game['Away Display Name']] = game['Away Logo'];
+            }
+        });
+
+    } catch (error) {
+        // If anything goes wrong, log the error and show a message to the user.
+        console.error("CRITICAL: Failed to fetch game data from Supabase table.", error);
+        document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
+    }
 }
 
 
@@ -371,7 +417,7 @@ async function renderGamesForWeek(week, matchId) {
     gamesContainer.innerHTML = '<p>Loading games...</p>';
     saveButton.style.display = 'block';
     const now = new Date();
-    const weeklyGames = allGames.filter(game => game.Week === week);
+    const weeklyGames = allGames.filter(game => game.Week === week).sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
     if (weeklyGames.length === 0) {
         gamesContainer.innerHTML = `<p class="card">No games found for ${week}.</p>`;
         saveButton.style.display = 'none';
