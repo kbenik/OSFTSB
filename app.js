@@ -30,6 +30,68 @@ let currentSelectedMatchId = null;
 // *** NEW: A reliable, built-in default avatar to prevent network errors ***
 const DEFAULT_AVATAR_URL = 'https://mtjflkwoxjnwaawjlaxy.supabase.co/storage/v1/object/sign/Assets/ChatGPT%20Image%20Sep%2012,%202025,%2004_06_17%20PM.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zZTY3ZGM1Mi0xZGZiLTQ5ZGYtYmRjZC02Y2VlZWQwMWFkMTUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJBc3NldHMvQ2hhdEdQVCBJbWFnZSBTZXAgMTIsIDIwMjUsIDA0XzA2XzE3IFBNLnBuZyIsImlhdCI6MTc1NzcwNzU5MywiZXhwIjoxNzg5MjQzNTkzfQ.CWGJaiGmfGGmq7RACw3TAP7DI-gpx4I6EtYcXw1LznU';
 
+// --- NEW: Helper map to get a team ID from its name for stat lookups ---
+const teamNameToIdMap = new Map([
+    ['Atlanta Falcons', 1], ['Buffalo Bills', 2], ['Chicago Bears', 3],
+    ['Cincinnati Bengals', 4], ['Cleveland Browns', 5], ['Dallas Cowboys', 6],
+    ['Denver Broncos', 7], ['Detroit Lions', 8], ['Green Bay Packers', 9],
+    ['Tennessee Titans', 10], ['Indianapolis Colts', 11], ['Kansas City Chiefs', 12],
+    ['Las Vegas Raiders', 13], ['Los Angeles Rams', 14], ['Miami Dolphins', 15],
+    ['Minnesota Vikings', 16], ['New England Patriots', 17], ['New Orleans Saints', 18],
+    ['New York Giants', 19], ['New York Jets', 20], ['Philadelphia Eagles', 21],
+    ['Arizona Cardinals', 22], ['Pittsburgh Steelers', 23], ['Los Angeles Chargers', 24],
+    ['San Francisco 49ers', 25], ['Seattle Seahawks', 26], ['Tampa Bay Buccaneers', 27],
+    ['Washington Commanders', 28], ['Carolina Panthers', 29], ['Jacksonville Jaguars', 30],
+    ['Baltimore Ravens', 33], ['Houston Texans', 34]
+]);
+
+// --- NEW: Mappings for displaying stats from the database ---
+const statMappings = {
+    'General': {
+        'games_played': 'Games Played',
+        'total_penalties': 'Total Penalties',
+        'total_penalty_yards': 'Penalty Yards',
+        'fumbles': 'Fumbles',
+        'fumbles_lost': 'Fumbles Lost',
+        'turnover_differential': 'Turnover +/-'
+    },
+    'Passing': {
+        'passing_yards': 'Passing Yards',
+        'passing_tds': 'Passing TDs',
+        'passing_attempts': 'Attempts',
+        'completions': 'Completions',
+        'completion_pct': 'Completion %',
+        'yards_per_pass_attempt': 'Yards/Attempt',
+        'sacks': 'Sacks Taken',
+        'qb_rating': 'Passer Rating'
+    },
+    'Rushing': {
+        'rushing_yards': 'Rushing Yards',
+        'rushing_tds': 'Rushing TDs',
+        'rushing_attempts': 'Attempts',
+        'yards_per_rush_attempt': 'Yards/Attempt'
+    },
+    'Receiving': {
+        'receptions': 'Receptions',
+        'receiving_yards': 'Receiving Yards',
+        'receiving_tds': 'Receiving TDs',
+        'receiving_targets': 'Targets',
+        'yards_per_reception': 'Yards/Reception'
+    },
+    'Defense': {
+        'defensive_sacks': 'Sacks',
+        'defensive_interceptions': 'Interceptions',
+        'total_tackles': 'Total Tackles',
+        'tackles_for_loss': 'Tackles for Loss',
+        'passes_defended': 'Passes Defended',
+        'fumbles_forced': 'Fumbles Forced'
+    },
+    'Downs': {
+        'first_downs': 'Total First Downs',
+        'third_down_conv_pct': '3rd Down %',
+        'fourth_down_conv_pct': '4th Down %'
+    }
+};
 
 // =================================================================
 // EVENT LISTENERS
@@ -1818,54 +1880,155 @@ function setupEventListeners() {
     });
 }
 
-
-function startApp() {
-    supabase.auth.onAuthStateChange(async (event, session) => {
-        const userJustSignedIn = currentUser === null && session?.user;
-        currentUser = session?.user || null;
-        currentUserProfile = null;
-
-        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || userJustSignedIn) {
-            if (currentUser) {
+async function initializeAppForUser() {
+    try {
+        if (currentUser) {
+            // Fetch the user's profile if it's not already loaded
+            if (!currentUserProfile || currentUserProfile.id !== currentUser.id) {
                 const { data: profile, error } = await supabase.from('profiles').select('*').eq('id', currentUser.id).single();
                 if (error) console.error("Could not fetch user profile:", error.message);
                 else currentUserProfile = profile;
             }
             updateUserStatusUI(currentUserProfile);
-            try {
-                if (currentUser) {
-                    await setupGlobalMatchSelector();
-                    await checkAndDisplayPicksReminder();
-                } else {
-                    document.getElementById('picks-reminder-banner').classList.add('hidden');
-                }
-            } catch (error) {
-                console.error("Error during auth state change setup:", error.message);
-            } finally {
-                const loadingOverlay = document.getElementById('loading-overlay');
-                if (loadingOverlay) {
-                    loadingOverlay.classList.add('hidden');
-                }
-                if (currentUser) {
-                    if (!currentSelectedMatchId) {
-                        showPage('matches-page');
-                    } else {
-                        const hash = window.location.hash.substring(1);
-                        const pageId = (hash || 'home') + '-page';
-                        showPage(document.getElementById(pageId) ? pageId : 'home-page');
-                    }
-                } else {
-                    showPage('auth-page');
-                }
+            await setupGlobalMatchSelector();
+            await checkAndDisplayPicksReminder();
+        } else {
+            // If there's no user, clean up the UI
+            updateUserStatusUI(null);
+            document.getElementById('picks-reminder-banner').classList.add('hidden');
+        }
+    } catch (error) {
+        console.error("Error during app initialization for user:", error.message);
+    } finally {
+        // Determine which page to show
+        if (currentUser) {
+            // If the user isn't in any matches, force them to the matches page
+            if (!currentSelectedMatchId) {
+                showPage('matches-page');
+            } else {
+                // Otherwise, show the page from the URL hash or default to home
+                const hash = window.location.hash.substring(1);
+                const pageId = (hash || 'home') + '-page';
+                showPage(document.getElementById(pageId) ? pageId : 'home-page');
             }
+        } else {
+            showPage('auth-page');
+        }
+    }
+}
+
+function startApp() {
+    supabase.auth.onAuthStateChange(async (event, session) => {
+        
+        // This is the key logic: check if the user has actually changed
+        const userChanged = currentUser?.id !== session?.user?.id;
+        currentUser = session?.user || null;
+
+        // Only clear the profile if the user is different or has logged out
+        if (userChanged) {
+            currentUserProfile = null;
+        }
+
+        // --- THE FIX ---
+        // We now handle the event that occurs when you return to a sleeping tab.
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+            
+            // Call our new reusable function to set up everything
+            await initializeAppForUser();
+
+            // Make sure the loading overlay is hidden after setup
+            const loadingOverlay = document.getElementById('loading-overlay');
+            if (loadingOverlay) {
+                loadingOverlay.classList.add('hidden');
+            }
+
         } else if (event === 'SIGNED_OUT') {
+            // Handle logout
             updateUserStatusUI(null);
             showPage('auth-page');
         }
     });
 }
 
-function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) { // --- THIS IS THE FIX: Added newsUrl ---
+function getOrdinalSuffix(i) {
+    const j = i % 10,
+          k = i % 100;
+    if (j == 1 && k != 11) {
+        return i + "st";
+    }
+    if (j == 2 && k != 12) {
+        return i + "nd";
+    }
+    if (j == 3 && k != 13) {
+        return i + "rd";
+    }
+    return i + "th";
+}
+
+async function displayTeamStatsForCategory(teamId, category) {
+    const outputDiv = document.getElementById('modal-stats-output');
+    if (!outputDiv) return;
+
+    outputDiv.innerHTML = '<p>Loading stats...</p>';
+
+    try {
+        const { data, error } = await supabase
+            .rpc('get_team_stats_with_ranks', { p_team_id: teamId })
+            .single();
+
+        if (error) throw error;
+        if (!data) {
+            outputDiv.innerHTML = '<p>No stats available for this team.</p>';
+            return;
+        }
+
+        const categoryStats = statMappings[category];
+        if (!categoryStats) {
+            outputDiv.innerHTML = '<p>Invalid category.</p>';
+            return;
+        }
+
+        let tableHtml = '<table class="stats-table"><tbody>';
+        for (const [dbKey, displayName] of Object.entries(categoryStats)) {
+            let value = data[dbKey];
+            
+            const rankKey = dbKey + '_rank';
+            const countKey = dbKey + '_count'; // The key for our new tie-count data
+            const rank = data[rankKey];
+            const tieCount = data[countKey];
+
+            // --- THIS IS THE NEW LOGIC FOR TIE FORMATTING ---
+            let rankDisplay = '';
+            if (rank) {
+                // If the tie count is greater than 1, add the "T-" prefix
+                if (tieCount > 1) {
+                    rankDisplay = `<span class="stat-rank">(T-${getOrdinalSuffix(rank)})</span>`;
+                } else {
+                    rankDisplay = `<span class="stat-rank">(${getOrdinalSuffix(rank)})</span>`;
+                }
+            }
+            // --- END OF NEW LOGIC ---
+            
+            if (dbKey.includes('_pct') && typeof value === 'number') {
+                value = value.toFixed(1) + '%';
+            }
+            if (value === null || typeof value === 'undefined') {
+                value = 'N/A';
+            }
+            
+            tableHtml += `<tr><td>${displayName}</td><td>${value} ${rankDisplay}</td></tr>`;
+        }
+        tableHtml += '</tbody></table>';
+
+        outputDiv.innerHTML = tableHtml;
+
+    } catch (err) {
+        console.error("Error fetching team stats with ranks:", err);
+        outputDiv.innerHTML = '<p>Could not load stats.</p>';
+    }
+}
+
+function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) {
     let modal = document.getElementById('info-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -1877,24 +2040,73 @@ function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) { // --- THIS 
                 <h3 id="modal-team-name"></h3>
                 <p id="modal-summary"></p>
                 <div id="modal-link-container"></div>
+                
+                <div id="modal-stats-container">
+                    <div id="modal-stats-dropdown" class="hidden"></div>
+                    <div id="modal-stats-output"></div>
+                </div>
             </div>
         `;
         document.body.appendChild(modal);
     }
     document.getElementById('modal-team-name').textContent = teamName;
     document.getElementById('modal-summary').textContent = summary;
-    const linkContainer = document.getElementById('modal-link-container');
     
-    // --- THIS IS THE FIX: Build the HTML for both buttons ---
+    const linkContainer = document.getElementById('modal-link-container');
+    const teamId = teamNameToIdMap.get(teamName);
+
     let linksHtml = '';
-    if (depthChartUrl && depthChartUrl.trim() !== '') {
+    if (depthChartUrl) {
         linksHtml += `<a href="${depthChartUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">Depth Chart</a>`;
     }
-    if (newsUrl && newsUrl.trim() !== '') {
+    if (newsUrl) {
         linksHtml += `<a href="${newsUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">News</a>`;
     }
+
+    // The "Stats" button remains the same here
+    linksHtml += `<button id="stats-toggle-btn" class="modal-link-button">Stats</button>`;
     linkContainer.innerHTML = linksHtml;
+
+    const statsToggleBtn = document.getElementById('stats-toggle-btn');
+    const statsDropdown = document.getElementById('modal-stats-dropdown');
+    const statsOutput = document.getElementById('modal-stats-output');
     
+    statsDropdown.innerHTML = '';
+    statsOutput.innerHTML = '';
+    statsDropdown.classList.add('hidden');
+    statsToggleBtn.classList.remove('active'); // Ensure button is not active initially
+
+    // We use a separate handler to avoid multiple listeners stacking up
+    const statsToggleHandler = () => {
+        const isHidden = statsDropdown.classList.toggle('hidden');
+        
+        // *** THIS IS THE KEY CHANGE ***
+        // This line adds/removes the 'active' class on the button itself
+        statsToggleBtn.classList.toggle('active', !isHidden);
+
+        if (!isHidden) {
+            statsDropdown.innerHTML = Object.keys(statMappings)
+                .map(cat => `<button class="stats-category-btn" data-category="${cat}">${cat}</button>`)
+                .join('');
+
+            statsDropdown.querySelectorAll('.stats-category-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    statsDropdown.querySelectorAll('.stats-category-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    const category = btn.dataset.category;
+                    displayTeamStatsForCategory(teamId, category);
+                });
+            });
+        } else {
+            statsOutput.innerHTML = '';
+        }
+    };
+    
+    // Replace any old listener with a new one to prevent bugs
+    statsToggleBtn.replaceWith(statsToggleBtn.cloneNode(true));
+    document.getElementById('stats-toggle-btn').addEventListener('click', statsToggleHandler);
+
     modal.classList.remove('hidden');
 }
 
