@@ -151,12 +151,54 @@ function determineDefaultWeek(games) {
     const now = new Date();
     const regularSeasonGames = games.filter(g => g.Week && g.Week.startsWith('Week '));
     if (regularSeasonGames.length === 0) return 'Week 1';
-    const nextGame = regularSeasonGames
-        .sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b))
-        .find(g => getKickoffTimeAsDate(g) > now);
-    if (nextGame) return nextGame.Week;
-    const lastWeek = regularSeasonGames[regularSeasonGames.length - 1];
-    return lastWeek ? lastWeek.Week : 'Week 1';
+
+    // Find the latest game that has actually started
+    const lastStartedGame = [...regularSeasonGames]
+        .sort((a, b) => getKickoffTimeAsDate(b) - getKickoffTimeAsDate(a))
+        .find(g => getKickoffTimeAsDate(g) <= now);
+
+    // If no games have started yet (i.e., before the season begins)
+    if (!lastStartedGame) {
+        // Default to the very first game of the season
+        const firstGame = [...regularSeasonGames].sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b))[0];
+        return firstGame ? firstGame.Week : 'Week 1';
+    }
+
+    // --- THIS IS THE NEW LOGIC ---
+    // We have the last game that kicked off, now we'll find the following Tuesday morning to use as our cutoff
+    const lastGameTime = getKickoffTimeAsDate(lastStartedGame);
+    const tuesdayCutoff = new Date(lastGameTime);
+
+    // Get the day of the week for the last game (Sunday=0, Monday=1, Tuesday=2, etc.)
+    const lastGameDay = lastGameTime.getUTCDay(); 
+    
+    // Calculate how many days we need to add to get to the next Tuesday.
+    // If the last game was on a Tuesday, we set the cutoff for the *following* Tuesday (7 days later).
+    const daysToAdd = lastGameDay === 2 ? 7 : (2 - lastGameDay + 7) % 7;
+    
+    tuesdayCutoff.setUTCDate(tuesdayCutoff.getUTCDate() + daysToAdd);
+    
+    // Set the specific cutoff time to 10:00 UTC (this is 6 AM EDT / 5 AM EST)
+    tuesdayCutoff.setUTCHours(10, 0, 0, 0);
+
+    const currentWeekNumber = parseInt(lastStartedGame.Week.split(' ')[1]);
+
+    // Compare the current time to the cutoff time
+    if (now > tuesdayCutoff) {
+        // If it's past Tuesday morning, roll over to the next week
+        const nextWeekNumber = currentWeekNumber + 1;
+        const maxWeek = Math.max(...regularSeasonGames.map(g => parseInt(g.Week.split(' ')[1])));
+        
+        // Ensure we don't go past the final week of the season
+        if (nextWeekNumber > maxWeek) {
+            return `Week ${maxWeek}`;
+        }
+        return `Week ${nextWeekNumber}`;
+    } else {
+        // If it's not yet Tuesday morning, stay on the current week
+        return lastStartedGame.Week;
+    }
+    // --- END OF NEW LOGIC ---
 }
 
 // =================================================================
@@ -505,9 +547,20 @@ async function displayDashboard() {
         if (pastPicksRes.data?.length > 0) {
             pastPicksRes.data.forEach(pick => {
                 const game = allGames.find(g => g['Game Id'] == pick.game_id);
-                const resultClass = pick.is_correct ? 'correct' : 'incorrect';
-                const resultText = pick.is_correct ? 'Correct' : 'Incorrect';
-                let points = pick.is_correct ? pick.wager : (pick.wager * -2);
+
+                // --- THIS IS THE FIX ---
+                let resultClass, resultText, points;
+                if (game && game['Game Winner'] && game['Game Winner'].toUpperCase() === 'TIE') {
+                    resultClass = 'tie';
+                    resultText = 'Tie';
+                    points = 0;
+                } else {
+                    resultClass = pick.is_correct ? 'correct' : 'incorrect';
+                    resultText = pick.is_correct ? 'Correct' : 'Incorrect';
+                    points = pick.is_correct ? pick.wager : (pick.wager * -2);
+                }
+                // --- END OF FIX ---
+
                 if (pick.is_double_up) points *= 2;
                 const pointsText = points > 0 ? `+${points}` : points;
                 if (game) {
@@ -753,11 +806,14 @@ async function loadScoreboardForMatch(matchId) {
         if (membersError) throw membersError;
         if (!members || members.length === 0) return;
 
+        // --- THIS IS THE FIX ---
+        // Added 'game_id' to the select statement so we can check for ties later.
         const { data: allScoredPicks, error: picksError } = await supabase
             .from('picks')
-            .select('user_id, week, wager, is_double_up, is_correct')
+            .select('user_id, week, wager, is_double_up, is_correct, game_id')
             .eq('match_id', matchId)
             .not('is_correct', 'is', null);
+        // --- END OF FIX ---
 
         if (picksError) throw picksError;
 
@@ -809,7 +865,6 @@ async function loadScoreboardForMatch(matchId) {
         document.getElementById('run-sheet-container').innerHTML = `<p class="card">Could not load scoreboard due to an error.</p>`;
     }
 }
-
 function processWeeklyScores(members, allPicks) {
     const labels = ['Start'];
     const maxWeek = 18;
@@ -833,7 +888,18 @@ function processWeeklyScores(members, allPicks) {
             if (weekNum > latestCompletedWeek) {
                 latestCompletedWeek = weekNum;
             }
-            let points = pick.is_correct ? pick.wager : (pick.wager * -2);
+            
+            // --- THIS IS THE FIX ---
+            // Find the game and check if the 'Game Winner' is 'TIE' before assigning points.
+            const game = allGames.find(g => g['Game Id'] == pick.game_id);
+            let points = 0;
+            if (game && game['Game Winner'] && game['Game Winner'].toUpperCase() === 'TIE') {
+                points = 0;
+            } else {
+                points = pick.is_correct ? pick.wager : (pick.wager * -2);
+            }
+            // --- END OF FIX ---
+
             if (pick.is_double_up) points *= 2;
             
             const userScores = weeklyScoresMap.get(pick.user_id);
@@ -901,7 +967,6 @@ function processWeeklyScores(members, allPicks) {
         tableData: { playerData, latestCompletedWeek }
     };
 }
-
 function renderPlayerScoresTable(tableData, currentWeek) {
     const { playerData, latestCompletedWeek } = tableData;
     const table = document.getElementById('player-scores-table');
@@ -1135,13 +1200,13 @@ function renderRunSheet(members, allPicks, week) {
 
     const sortedMembers = [...members].sort((a, b) => a.profiles.username.localeCompare(b.profiles.username));
 
-    // --- NEW: PRE-CALCULATE TOTALS ---
+    // --- PRE-CALCULATE TOTALS (This part was already correct) ---
     const weeklyTotals = new Map();
     sortedMembers.forEach(member => weeklyTotals.set(member.profiles.id, 0));
 
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
-        if (kickoff >= now) return; // Only calculate for games that have started
+        if (kickoff >= now) return; 
 
         const isGameFinal = game.Status === 'post';
         const showScore = game.Status !== 'pre';
@@ -1153,8 +1218,13 @@ function renderRunSheet(members, allPicks, week) {
             if (pick) {
                 let points;
                 if (isGameFinal) {
-                    points = pick.is_correct ? pick.wager : (pick.wager * -2);
-                } else if (showScore && !isNaN(homeScoreNum) && !isNaN(awayScoreNum) && (homeScoreNum > 0 || awayScoreNum > 0)) {
+                    if (game['Game Winner'] && game['Game Winner'].toUpperCase() === 'TIE') {
+                        points = 0;
+                    } else {
+                        points = pick.is_correct ? pick.wager : (pick.wager * -2);
+                    }
+                } 
+                else if (showScore && !isNaN(homeScoreNum) && !isNaN(awayScoreNum) && (homeScoreNum > 0 || awayScoreNum > 0)) {
                     let winningTeam = 'TIE';
                     if (homeScoreNum > awayScoreNum) winningTeam = game['Home Display Name'];
                     if (awayScoreNum > homeScoreNum) winningTeam = game['Away Display Name'];
@@ -1187,7 +1257,6 @@ function renderRunSheet(members, allPicks, week) {
 
     tableHtml += '<tbody>';
 
-    // --- NEW: RENDER TOTAL ROW AT THE TOP OF THE BODY ---
     tableHtml += '<tr class="weekly-total-row"><td class="game-matchup-cell">Total</td>';
     sortedMembers.forEach(member => {
         const total = weeklyTotals.get(member.profiles.id);
@@ -1195,7 +1264,6 @@ function renderRunSheet(members, allPicks, week) {
         tableHtml += `<td>${totalDisplay}</td>`;
     });
     tableHtml += '</tr>';
-    // --- END TOTAL ROW ---
 
     weeklyGames.forEach(game => {
         const kickoff = getKickoffTimeAsDate(game);
@@ -1262,8 +1330,16 @@ function renderRunSheet(members, allPicks, week) {
                     let cellStyle = '';
                     let points;
 
+                    // --- THIS IS THE FIX ---
+                    // The same tie-handling logic from the "Totals" calculation
+                    // is now correctly placed here for rendering the individual cells.
                     if (isGameFinal) {
-                        points = pick.is_correct ? pick.wager : (pick.wager * -2);
+                        if (game['Game Winner'] && game['Game Winner'].toUpperCase() === 'TIE') {
+                            points = 0;
+                        } else {
+                            points = pick.is_correct ? pick.wager : (pick.wager * -2);
+                        }
+                    // --- END OF FIX ---
                     } else {
                         const homeScoreNum = parseInt(homeScore, 10);
                         const awayScoreNum = parseInt(awayScore, 10);
