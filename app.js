@@ -2040,76 +2040,100 @@ function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) {
                 <h3 id="modal-team-name"></h3>
                 <p id="modal-summary"></p>
                 <div id="modal-link-container"></div>
-                
-                <div id="modal-stats-container">
-                    <div id="modal-stats-dropdown" class="hidden"></div>
+                <div id="modal-stats-container" style="display: none;">
+                    <div id="modal-stats-dropdown"></div>
                     <div id="modal-stats-output"></div>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
     }
-    document.getElementById('modal-team-name').textContent = teamName;
-    document.getElementById('modal-summary').textContent = summary;
-    
+
+    const summaryEl = document.getElementById('modal-summary');
+    const statsContainer = document.getElementById('modal-stats-container');
     const linkContainer = document.getElementById('modal-link-container');
-    const teamId = teamNameToIdMap.get(teamName);
-
-    let linksHtml = '';
-    if (depthChartUrl) {
-        linksHtml += `<a href="${depthChartUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">Depth Chart</a>`;
-    }
-    if (newsUrl) {
-        linksHtml += `<a href="${newsUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">News</a>`;
-    }
-
-    // The "Stats" button remains the same here
-    linksHtml += `<button id="stats-toggle-btn" class="modal-link-button">Stats</button>`;
-    linkContainer.innerHTML = linksHtml;
-
-    const statsToggleBtn = document.getElementById('stats-toggle-btn');
     const statsDropdown = document.getElementById('modal-stats-dropdown');
     const statsOutput = document.getElementById('modal-stats-output');
-    
-    statsDropdown.innerHTML = '';
-    statsOutput.innerHTML = '';
-    statsDropdown.classList.add('hidden');
-    statsToggleBtn.classList.remove('active'); // Ensure button is not active initially
+    const teamId = teamNameToIdMap.get(teamName);
 
-    // We use a separate handler to avoid multiple listeners stacking up
+    // Populate static content and set initial state
+    document.getElementById('modal-team-name').textContent = teamName;
+    summaryEl.textContent = summary;
+    summaryEl.classList.remove('hidden');
+    statsContainer.style.display = 'none';
+
+    // --- FIX: Programmatically create buttons to ensure listeners work ---
+    linkContainer.innerHTML = ''; // Clear any old buttons
+
+    // Create Depth Chart link if URL exists
+    if (depthChartUrl) {
+        const depthChartLink = document.createElement('a');
+        depthChartLink.href = depthChartUrl;
+        depthChartLink.target = '_blank';
+        depthChartLink.rel = 'noopener noreferrer';
+        depthChartLink.className = 'modal-link-button';
+        depthChartLink.textContent = 'Depth Chart';
+        linkContainer.appendChild(depthChartLink);
+    }
+
+    // Create News link if URL exists
+    if (newsUrl) {
+        const newsLink = document.createElement('a');
+        newsLink.href = newsUrl;
+        newsLink.target = '_blank';
+        newsLink.rel = 'noopener noreferrer';
+        newsLink.className = 'modal-link-button';
+        newsLink.textContent = 'News';
+        linkContainer.appendChild(newsLink);
+    }
+
+    // Create the Stats/Summary toggle button
+    const statsToggleBtn = document.createElement('button');
+    statsToggleBtn.id = 'stats-toggle-btn';
+    statsToggleBtn.className = 'modal-link-button';
+    statsToggleBtn.textContent = 'Stats'; // Initial text
+
     const statsToggleHandler = () => {
-        const isHidden = statsDropdown.classList.toggle('hidden');
-        
-        // *** THIS IS THE KEY CHANGE ***
-        // This line adds/removes the 'active' class on the button itself
-        statsToggleBtn.classList.toggle('active', !isHidden);
+        const isShowingSummary = statsContainer.style.display === 'none';
 
-        if (!isHidden) {
-            statsDropdown.innerHTML = Object.keys(statMappings)
-                .map(cat => `<button class="stats-category-btn" data-category="${cat}">${cat}</button>`)
-                .join('');
+        if (isShowingSummary) {
+            // --- ACTION: Switch to Stats View ---
+            summaryEl.classList.add('hidden');
+            statsContainer.style.display = 'block';
+            statsToggleBtn.classList.add('active');
+            statsToggleBtn.innerHTML = `&larr; Summary`;
 
-            statsDropdown.querySelectorAll('.stats-category-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    statsDropdown.querySelectorAll('.stats-category-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    
-                    const category = btn.dataset.category;
-                    displayTeamStatsForCategory(teamId, category);
+            if (statsDropdown.innerHTML === '') {
+                statsDropdown.innerHTML = Object.keys(statMappings)
+                    .map(cat => `<button class="stats-category-btn" data-category="${cat}">${cat}</button>`)
+                    .join('');
+
+                statsDropdown.querySelectorAll('.stats-category-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        statsDropdown.querySelectorAll('.stats-category-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        displayTeamStatsForCategory(teamId, btn.dataset.category);
+                    });
                 });
-            });
+            }
         } else {
+            // --- ACTION: Switch back to Summary View ---
+            statsContainer.style.display = 'none';
+            summaryEl.classList.remove('hidden');
+            statsToggleBtn.classList.remove('active');
+            statsToggleBtn.textContent = 'Stats';
+
             statsOutput.innerHTML = '';
+            statsDropdown.querySelectorAll('.stats-category-btn').forEach(b => b.classList.remove('active'));
         }
     };
-    
-    // Replace any old listener with a new one to prevent bugs
-    statsToggleBtn.replaceWith(statsToggleBtn.cloneNode(true));
-    document.getElementById('stats-toggle-btn').addEventListener('click', statsToggleHandler);
+
+    // Attach the listener directly to the button we just created
+    statsToggleBtn.addEventListener('click', statsToggleHandler);
+    linkContainer.appendChild(statsToggleBtn); // Add the button to the DOM
 
     modal.classList.remove('hidden');
 }
-
 
 
 function hideInfoPopup() {
