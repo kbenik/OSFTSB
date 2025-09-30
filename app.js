@@ -148,56 +148,42 @@ function getKickoffTimeAsDate(game) {
 }
 
 function determineDefaultWeek(games) {
-    const now = new Date();
-    const regularSeasonGames = games.filter(g => g.Week && g.Week.startsWith('Week '));
-    if (regularSeasonGames.length === 0) return 'Week 1';
-
-    // Find the latest game that has actually started
-    const lastStartedGame = [...regularSeasonGames]
-        .sort((a, b) => getKickoffTimeAsDate(b) - getKickoffTimeAsDate(a))
-        .find(g => getKickoffTimeAsDate(g) <= now);
-
-    // If no games have started yet (i.e., before the season begins)
-    if (!lastStartedGame) {
-        // Default to the very first game of the season
-        const firstGame = [...regularSeasonGames].sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b))[0];
-        return firstGame ? firstGame.Week : 'Week 1';
-    }
-
     // --- THIS IS THE NEW LOGIC ---
-    // We have the last game that kicked off, now we'll find the following Tuesday morning to use as our cutoff
-    const lastGameTime = getKickoffTimeAsDate(lastStartedGame);
-    const tuesdayCutoff = new Date(lastGameTime);
+    // This function now determines the default week by finding the first week
+    // where not all games have a final status ('post').
 
-    // Get the day of the week for the last game (Sunday=0, Monday=1, Tuesday=2, etc.)
-    const lastGameDay = lastGameTime.getUTCDay(); 
+    // Filter for games that are part of the regular season.
+    const regularSeasonGames = games.filter(g => g.Week && g.Week.startsWith('Week '));
     
-    // Calculate how many days we need to add to get to the next Tuesday.
-    // If the last game was on a Tuesday, we set the cutoff for the *following* Tuesday (7 days later).
-    const daysToAdd = lastGameDay === 2 ? 7 : (2 - lastGameDay + 7) % 7;
-    
-    tuesdayCutoff.setUTCDate(tuesdayCutoff.getUTCDate() + daysToAdd);
-    
-    // Set the specific cutoff time to 10:00 UTC (this is 6 AM EDT / 5 AM EST)
-    tuesdayCutoff.setUTCHours(10, 0, 0, 0);
-
-    const currentWeekNumber = parseInt(lastStartedGame.Week.split(' ')[1]);
-
-    // Compare the current time to the cutoff time
-    if (now > tuesdayCutoff) {
-        // If it's past Tuesday morning, roll over to the next week
-        const nextWeekNumber = currentWeekNumber + 1;
-        const maxWeek = Math.max(...regularSeasonGames.map(g => parseInt(g.Week.split(' ')[1])));
-        
-        // Ensure we don't go past the final week of the season
-        if (nextWeekNumber > maxWeek) {
-            return `Week ${maxWeek}`;
-        }
-        return `Week ${nextWeekNumber}`;
-    } else {
-        // If it's not yet Tuesday morning, stay on the current week
-        return lastStartedGame.Week;
+    // If there are no games, default to Week 1.
+    if (regularSeasonGames.length === 0) {
+        return 'Week 1';
     }
+
+    // Get all unique weeks and sort them numerically.
+    const allWeeksSorted = [...new Set(regularSeasonGames.map(g => g.Week))]
+        .sort((a, b) => parseInt(a.split(' ')[1]) - parseInt(b.split(' ')[1]));
+
+    // Find the first week that is not fully completed.
+    const currentWeek = allWeeksSorted.find(week => {
+        // Get all games for the specific week.
+        const gamesInWeek = regularSeasonGames.filter(g => g.Week === week);
+        
+        // If there are no games for this week for some reason, we can't evaluate it.
+        if (gamesInWeek.length === 0) {
+            return false;
+        }
+        
+        // Check if every single game in this week has the status 'post' (final).
+        const allGamesFinal = gamesInWeek.every(g => g.Status === 'post');
+        
+        // We are looking for the first week where NOT all games are final.
+        return !allGamesFinal;
+    });
+
+    // If we found a week that's not yet complete, that's our default week.
+    // If all games in all weeks are complete, default to the very last week of the season.
+    return currentWeek || allWeeksSorted[allWeeksSorted.length - 1];
     // --- END OF NEW LOGIC ---
 }
 
