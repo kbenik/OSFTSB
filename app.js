@@ -239,7 +239,6 @@ const teamNameToIdMap = new Map([
 // --- NEW: Mappings for displaying stats from the database ---
 const statMappings = {
     'General': {
-        'games_played': 'Games Played',
         'total_penalties': 'Total Penalties',
         'total_penalty_yards': 'Penalty Yards',
         'fumbles': 'Fumbles',
