@@ -1,3 +1,53 @@
+
+// /* DraftPicksManager stub */
+if (typeof DraftPicksManager === 'undefined') {
+  var DraftPicksManager = { save:()=>{}, load:()=>null, applyToState:()=>false, applyToUI:()=>{}, clear:()=>{}, _key:()=>'' };
+}
+
+
+// ===== Auth helpers to prevent "logged out but no error" states =====
+async function requireSession() {
+  const r1 = await supabase.auth.getSession();
+  let session = r1?.data?.session || null;
+  if (!session) {
+    try {
+      const r2 = await supabase.auth.refreshSession();
+      session = r2?.data?.session || null;
+    } catch (_) {}
+  }
+  if (!session) {
+    console.warn('[auth] No session; showing login page');
+    if (typeof showPage === 'function') showPage('login');
+    throw new Error('NO_SESSION');
+  }
+  return session;
+}
+
+// Wrap a Supabase call; on 401/403, refresh + retry once
+async function withAuth(fn) {
+  try {
+    await requireSession();
+    return await fn();
+  } catch (e) {
+    if (e && (e.status === 401 || e.status === 403 || ((e.message||'') && (e.message||'').includes('JWT')))) {
+      try { await supabase.auth.refreshSession(); } catch (_) {}
+      try { supabase.auth.startAutoRefresh(); } catch (_) {}
+      return await fn();
+    }
+    throw e;
+}}
+
+// Start auto refresh whenever we come to foreground
+function startAutoRefreshIfNeeded() {
+  try { supabase.auth.startAutoRefresh(); } catch (_) {}
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') startAutoRefreshIfNeeded();
+});
+window.addEventListener('focus', startAutoRefreshIfNeeded);
+window.addEventListener('pageshow', (e) => { if (e.persisted) startAutoRefreshIfNeeded(); });
+// ====================================================================
+
 // =================================================================
 // CONFIGURATION & INITIALIZATION
 // =================================================================
@@ -9,6 +59,65 @@ const supabase = self.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     persistSession: true
   }
 });
+
+// ------- Robust Resume Seatbelt -------
+let __wentHiddenAt = 0;
+
+async function __rehydrateAll(reason = 'resume') {
+  try { await supabase.auth.getSession(); } catch (e) {}
+
+  try { if (typeof fetchGameData === 'function') { await fetchGameData(); } } catch (e) {}
+
+  try { if (typeof initializeAppForUser === 'function') { await initializeAppForUser(); } } catch (e) {}
+
+  try {
+    const active = document.querySelector('.page.active');
+    if (active && typeof showPage === 'function') showPage(active.id);
+  } catch (e) {}
+
+  try {
+    if (window.__activePopupId === 'info-modal' && window.__infoPopupCtx) {
+      const { teamName } = window.__infoPopupCtx;
+      if (typeof showInfoPopup === 'function') await showInfoPopup(teamName);
+    }
+  } catch (e) {}
+
+  try {
+    document.querySelectorAll('.modal-overlay').forEach(el => {
+      const hiddenish = el.classList.contains('hidden') || getComputedStyle(el).opacity === '0';
+      if (hiddenish) {
+        el.classList.add('hidden');
+        el.style.pointerEvents = 'none';
+      }
+    });
+  } catch (e) {}
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    __wentHiddenAt = Date.now();
+  } else if (document.visibilityState === 'visible') {
+    const awayMs = Date.now() - (__wentHiddenAt || Date.now());
+    const doFull = awayMs > 10_000;
+    let done = false;
+
+    Promise.race([
+      __rehydrateAll('visibilitychange').then(() => { done = true; }),
+      new Promise(res => setTimeout(res, 1200))
+    ]).then(() => {
+      if (!done && doFull) location.reload();
+    });
+  }
+});
+
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted) location.reload();
+});
+
+window.addEventListener('focus', () => { __rehydrateAll('focus'); });
+// ------- End Seatbelt -------
+
+
 const SHEET_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=1227961915&single=true&output=csv';
 const TEAM_INFO_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vScqmMOmdB95tGFqkzzPMNUxnGdIum_bXFBhEvX8Xj-b0M3hZYCu8w8V9k7CgKvjHMCtnmj3Y3Vza0A/pub?gid=2118253087&single=true&output=csv';
 // --- STATE MANAGEMENT ---
@@ -20,12 +129,94 @@ let currentUser = null;
 let currentUserProfile = null; 
 let userPicks = {};
 let userWagers = {};
-let doubleUpPick = null; // For single-double-up mode
+let doubleUpPick = null; DraftPicksManager.save(); // For single-double-up mode
 let userDoubleUps = new Set(); // For multiple-double-up mode
 let currentMatchSettings = {}; // To store the settings of the current match
 let initiallySavedPicks = new Set();
 let scoreChartInstance = null;
 let currentSelectedMatchId = null;
+
+var DraftPicksManager = {
+  _key() {
+    const week = (document.getElementById('week-selector')?.value || defaultWeek || '').toString();
+    const matchId = (currentSelectedMatchId || 'nomatch').toString();
+    const uid = (currentUser && currentUser.id) ? currentUser.id : 'anon';
+    return `draftPicks:v1:${uid}:${matchId}:${week}`;
+  },
+  snapshot() {
+    return {
+      userPicks,
+      userWagers,
+      doubleUpPick,
+      userDoubleUps: Array.from(userDoubleUps),
+      ts: Date.now()
+    };
+  },
+  save() {
+    try { localStorage.setItem(this._key(), JSON.stringify(this.snapshot())); } catch (e) { /* ignore */ }
+  },
+  load() {
+    try {
+      const raw = localStorage.getItem(this._key());
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  },
+  clear() {
+    try { localStorage.removeItem(this._key()); } catch (e) {}
+  },
+  applyToState() {
+    const d = this.load();
+    if (!d) return false;
+    try {
+      userPicks = Object.assign({}, userPicks, d.userPicks || {});
+      userWagers = Object.assign({}, userWagers, d.userWagers || {});
+      if (d.doubleUpPick != null) doubleUpPick = d.doubleUpPick;
+      if (Array.isArray(d.userDoubleUps)) userDoubleUps = new Set(d.userDoubleUps);
+      return true;
+    } catch (e) { return false; }
+  },
+  applyToUI() {
+    try {
+      const container = document.getElementById('games-container');
+      if (!container) return;
+      // teams
+      Object.entries(userPicks || {}).forEach(([gid, team]) => {
+        if (!team) return;
+        const card = container.querySelector(`.game-card[data-game-id="${gid}"]`);
+        if (!card) return;
+        card.querySelectorAll('.team').forEach(t => {
+          t.classList.toggle('selected', t.dataset.teamName === team);
+        });
+      });
+      // wagers
+      Object.entries(userWagers || {}).forEach(([gid, w]) => {
+        if (!w) return;
+        const card = container.querySelector(`.game-card[data-game-id="${gid}"]`);
+        if (!card) return;
+        card.querySelectorAll('.wager-btn').forEach(b => {
+          const val = parseInt(b.dataset.value, 10);
+          b.classList.toggle('selected', val === parseInt(w, 10));
+        });
+      });
+      // double ups
+      if (currentMatchSettings && currentMatchSettings.allow_multiple_double_ups) {
+        container.querySelectorAll('.game-card').forEach(card => {
+          const gid = card.dataset.gameId;
+          const btn = card.querySelector('.individual-double-up');
+          if (btn && gid) btn.classList.toggle('selected', userDoubleUps.has(gid));
+        });
+      } else if (doubleUpPick) {
+        const btn = container.querySelector(`.game-card[data-game-id="${doubleUpPick}"] .shared-double-up`);
+        if (btn) btn.classList.add('selected'); DraftPicksManager.save();
+      }
+      if (typeof updatePicksCounter === 'function') updatePicksCounter(); DraftPicksManager.save();
+    } catch (e) {}
+  }
+};
+// === End Draft Picks Autosave ===
+// === Draft Picks Autosave (persists unsaved selections across tab switch / refresh) ===
+
+
 
 // *** NEW: A reliable, built-in default avatar to prevent network errors ***
 const DEFAULT_AVATAR_URL = 'https://mtjflkwoxjnwaawjlaxy.supabase.co/storage/v1/object/sign/Assets/ChatGPT%20Image%20Sep%2012,%202025,%2004_06_17%20PM.png?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV8zZTY3ZGM1Mi0xZGZiLTQ5ZGYtYmRjZC02Y2VlZWQwMWFkMTUiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJBc3NldHMvQ2hhdEdQVCBJbWFnZSBTZXAgMTIsIDIwMjUsIDA0XzA2XzE3IFBNLnBuZyIsImlhdCI6MTc1NzcwNzU5MywiZXhwIjoxNzg5MjQzNTkzfQ.CWGJaiGmfGGmq7RACw3TAP7DI-gpx4I6EtYcXw1LznU';
@@ -537,7 +728,7 @@ async function loadAndApplyUserPicks(week, matchId) {
         if (error) throw error;
         userPicks = {};
         userWagers = {};
-        doubleUpPick = null;
+        doubleUpPick = null; DraftPicksManager.save();
         userDoubleUps.clear(); // Clear the set for the new week
         initiallySavedPicks.clear();
 
@@ -549,7 +740,7 @@ async function loadAndApplyUserPicks(week, matchId) {
 
             if (p.is_double_up) {
                 if (currentMatchSettings.allow_multiple_double_ups) {
-                    userDoubleUps.add(gameIdStr);
+                    userDoubleUps.add(gameIdStr); DraftPicksManager.save();
                 } else {
                     doubleUpPick = gameIdStr;
                 }
@@ -565,6 +756,8 @@ async function loadAndApplyUserPicks(week, matchId) {
             }
         });
         updatePicksCounter();
+        // Overlay any locally drafted (unsaved) picks
+        if (DraftPicksManager.applyToState()) { DraftPicksManager.applyToUI(); }
     } catch (err) {
         console.error("Non-critical error fetching user picks:", err.message);
     }
@@ -1541,6 +1734,8 @@ async function displayMatchesPage() {
 // EVENT HANDLERS & DATA SAVING
 // =================================================================
 async function handleProfileUpdate(e) {
+  try { await requireSession(); } catch (e) { /* surface login UI */ }
+
     e.preventDefault();
     const saveButton = document.getElementById('save-profile-btn');
     const newUsername = document.getElementById('profile-username').value;
@@ -1586,8 +1781,8 @@ function addGameCardEventListeners() {
                     userPicks[gameId] = undefined;
                     userWagers[gameId] = undefined;
                     // Also remove double up if team is deselected
-                    if (doubleUpPick === gameId) doubleUpPick = null;
-                    userDoubleUps.delete(gameId);
+                    if (doubleUpPick === gameId) doubleUpPick = null; DraftPicksManager.save();
+                    userDoubleUps.delete(gameId); DraftPicksManager.save();
                     card.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
                 } else {
                     userPicks[gameId] = teamName;
@@ -1603,7 +1798,7 @@ function addGameCardEventListeners() {
                 if (!userPicks[gameId]) return alert("Please select a team before placing a wager.");
                 userWagers[gameId] = parseInt(btn.dataset.value, 10);
                 card.querySelectorAll('.wager-btn').forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected');
+                btn.classList.add('selected'); DraftPicksManager.save();
             });
         });
 
@@ -1630,9 +1825,9 @@ function addGameCardEventListeners() {
                     // If the cap is not reached (or if they are deselecting), toggle as normal.
                     e.target.classList.toggle('selected');
                     if (e.target.classList.contains('selected')) {
-                        userDoubleUps.add(gameId);
+                        userDoubleUps.add(gameId); DraftPicksManager.save();
                     } else {
-                        userDoubleUps.delete(gameId);
+                        userDoubleUps.delete(gameId); DraftPicksManager.save();
                     }
                 });
             }
@@ -1646,9 +1841,9 @@ function addGameCardEventListeners() {
                     allSharedDoubleUpBtns.forEach(b => b.classList.remove('selected'));
                     if (!wasSelected) {
                         e.target.classList.add('selected');
-                        doubleUpPick = gameId;
+                        doubleUpPick = gameId; DraftPicksManager.save();
                     } else {
-                        doubleUpPick = null;
+                        doubleUpPick = null; DraftPicksManager.save();
                     }
                 });
             }
@@ -1657,6 +1852,8 @@ function addGameCardEventListeners() {
 }
 
 async function savePicks() {
+  try { await requireSession(); } catch (e) { /* surface login UI */ }
+
     if (!currentUser) return alert('You must be logged in!');
     const selectedWeek = document.getElementById('week-selector').value;
     if (!currentSelectedMatchId) {
@@ -1708,6 +1905,7 @@ async function savePicks() {
             if (error) throw error;
         }
         alert('Your picks have been saved for this match!');
+        DraftPicksManager.clear();
         renderGamesForWeek(selectedWeek, currentSelectedMatchId);
     } catch (error) {
         console.error("Save Picks Error:", error);
@@ -1772,6 +1970,8 @@ async function setupGlobalMatchSelector() {
 }
 
 async function joinMatch(matchId) {
+  try { await requireSession(); } catch (e) { /* surface login UI */ }
+
     const password = prompt("Please enter the match password:");
     if (!password) return;
     const { error } = await supabase.rpc('join_match_with_password', {
@@ -1787,6 +1987,8 @@ async function joinMatch(matchId) {
 }
 
 async function createMatch() {
+  try { await requireSession(); } catch (e) { /* surface login UI */ }
+
     const name = prompt("Enter a name for your new match:");
     if (!name || name.trim().length < 3) {
         return alert("Match name must be at least 3 characters long.");
@@ -1890,6 +2092,8 @@ function setupEventListeners() {
 }
 
 async function initializeAppForUser() {
+  try { await requireSession(); } catch (e) { /* surface login UI */ }
+
     try {
         if (currentUser) {
             // Fetch the user's profile if it's not already loaded
@@ -1977,6 +2181,18 @@ function getOrdinalSuffix(i) {
 }
 
 async function displayTeamStatsForCategory(teamId, category) {
+  try { await supabase.auth.getSession(); } catch (e) { /* no-op */ }
+  // Resolve teamId from name if needed and rebuild map if missing
+  try {
+    if ((!teamId || typeof teamId !== 'string') && window.__statsCtx && window.__statsCtx.teamName) {
+      const tn = window.__statsCtx.teamName;
+      if (typeof teamNameToIdMap === 'undefined' || !teamNameToIdMap?.get) {
+        if (typeof fetchGameData === 'function') { await fetchGameData(); }
+      }
+      if (teamNameToIdMap?.get) teamId = teamNameToIdMap.get(tn) || teamId;
+    }
+  } catch (e) {}
+
     // --- THIS IS THE FIX ---
     // By placing this here, we guarantee the connection to Supabase is "awake" and authenticated
     // right before we make the RPC call, preventing the indefinite loading state when returning to the tab.
@@ -2044,7 +2260,32 @@ async function displayTeamStatsForCategory(teamId, category) {
     }
 }
 
-function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) {
+async function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) {
+    
+window.__activePopupId = 'info-modal';
+window.__infoPopupCtx = { teamName };
+window.__infoPopupSourceRoute = location.hash || '';
+window.__reopenInfoPopupOnResume = true;
+// Track active popup and minimal context so we can repaint after resume
+    window.__activePopupId = 'info-modal';
+    window.__infoPopupCtx = { teamName };
+    try { await supabase.auth.getSession(); } catch (e) {}
+
+    // If essential fields missing, lazy-fetch from TEAM_INFO_URL
+    if (!summary || !depthChartUrl || !newsUrl) {
+      try {
+        const resp = await fetch(`${TEAM_INFO_URL}&t=${Date.now()}`, { cache: 'no-store' });
+        const csv = await resp.text();
+        const rows = parseTeamInfoCSV(csv);
+        const rec = rows.find(r => r.TeamName === teamName);
+        if (rec) {
+          summary = summary || rec.AISummary;
+          depthChartUrl = depthChartUrl || rec.DepthChart;
+          newsUrl = newsUrl || rec.News;
+        }
+      } catch (e) { /* swallow; popup still renders minimal */ }
+    }
+
     // 1. Find or create the modal element
     let modal = document.getElementById('info-modal');
     if (!modal) {
@@ -2078,7 +2319,8 @@ function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) {
     const statsContainer = modal.querySelector('#modal-stats-container');
     const linkContainer = modal.querySelector('#modal-link-container');
     const statsDropdown = modal.querySelector('#modal-stats-dropdown');
-    const teamId = teamNameToIdMap.get(teamName);
+    const teamId = teamNameToIdMap?.get ? teamNameToIdMap.get(teamName) : undefined;
+window.__statsCtx = { teamId, teamName, category: 'General' };
 
     // 4. Populate the fresh elements with the current team's data
     modal.querySelector('#modal-team-name').textContent = teamName;
@@ -2086,10 +2328,10 @@ function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) {
 
     // Build the link buttons
     if (depthChartUrl) {
-        linkContainer.innerHTML += `<a href="${depthChartUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">Depth Chart</a>`;
+        linkContainer.innerHTML += `<a href="${depthChartUrl}" target="_blank" rel="noopener noreferrer" target="_blank" rel="noopener noreferrer" class="modal-link-button">Depth Chart</a>`;
     }
     if (newsUrl) {
-        linkContainer.innerHTML += `<a href="${newsUrl}" target="_blank" rel="noopener noreferrer" class="modal-link-button">News</a>`;
+        linkContainer.innerHTML += `<a href="${newsUrl}" target="_blank" rel="noopener noreferrer" target="_blank" rel="noopener noreferrer" class="modal-link-button">News</a>`;
     }
 
     // 5. Create the toggle button and attach a NEW event handler for it
@@ -2138,7 +2380,41 @@ function showInfoPopup(teamName, summary, depthChartUrl, newsUrl) {
     linkContainer.appendChild(statsToggleBtn);
 
     // 6. Finally, show the fully rebuilt modal
-    modal.classList.remove('hidden');
+    // Delegated handler for category buttons; persists across re-renders
+if (!modal.__statsDelegated) {
+  modal.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('.stats-category-btn');
+    if (!btn) return;
+    const category = btn.dataset.category;
+    if (!category) return;
+    // Update selected state
+    modal.querySelectorAll('.stats-category-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    // Persist context
+    if (window.__statsCtx) window.__statsCtx.category = category;
+    // Render stats
+    try {
+      await displayTeamStatsForCategory(window.__statsCtx.teamId, category);
+    } catch (e) { console.warn('stats switch failed', e); }
+  });
+  modal.__statsDelegated = true;
+}
+
+// Restore previously selected category after resume, else default to General/Rushing fallback
+(async () => {
+  try {
+    const want = (window.__statsCtx && window.__statsCtx.category) || null;
+    const target = want && modal.querySelector(`.stats-category-btn[data-category="${want}"]`);
+    const first = modal.querySelector('.stats-category-btn');
+    const fallback = target || first;
+    if (fallback) {
+      // Emulate click to trigger render
+      fallback.click();
+    }
+  } catch (e) {}
+})();
+
+modal.classList.remove('hidden');
 }
 
 
@@ -2148,6 +2424,9 @@ function hideInfoPopup() {
     if (modal) {
         modal.classList.add('hidden');
     }
+
+    window.__reopenInfoPopupOnResume = false;
+    window.__activePopupId = null;
 }
 
 async function init() {
@@ -2170,3 +2449,30 @@ async function init() {
         document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
     }
 }
+
+// ------- Diagnostics -------
+// Press ` (tilde/backtick) to log top element at screen center (helps find invisible blockers)
+window.addEventListener('keydown', (e) => {
+  if (e.key === '`') {
+    const els = document.elementsFromPoint(window.innerWidth/2, window.innerHeight/2);
+    console.info('[Probe] Top elements under center:', els.slice(0, 5));
+  }
+});
+// Surface silent failures
+window.addEventListener('error', e => console.error('GlobalError:', e.message, e.error || ''));
+window.addEventListener('unhandledrejection', e => console.error('UnhandledRejection:', e.reason || ''));
+// ------- End Diagnostics -------
+
+
+// Close info popup on route changes
+window.addEventListener('hashchange', () => {
+  const m = document.getElementById('info-modal');
+  if (m) m.classList.add('hidden');
+  window.__reopenInfoPopupOnResume = false;
+  window.__activePopupId = null;
+});
+
+// Autosave draft when tab is hidden (extra safety)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') { try { DraftPicksManager.save(); } catch (e) {} }
+});
