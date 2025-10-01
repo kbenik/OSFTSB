@@ -1094,3 +1094,21 @@ canvas {
   border-color: transparent;
   box-shadow: none;
 }
+
+/* --- Mobile header overrides (compact header layout) --- */
+@media (max-width: 600px) {
+  #logo { display: none !important; }
+  .nav-container { display:flex; align-items:center; gap:10px; position:relative; }
+  #user-status { order: 1; display:flex; align-items:center; gap:10px; }
+  #user-status .welcome-message-text { display:none !important; }
+  #hamburger-btn, .hamburger { order: 2; display:flex !important; }
+  #global-selector-container { order: 3; margin: 0 8px; width:auto !important; flex:1 1 auto; padding: 10px;}
+  #global-match-selector { width: 100%; max-width: 100%; }
+  header .logout-icon-btn { position:absolute; right:12px; top:50%; transform: translateY(-50%); }
+  #main-nav { order: 5; }
+}
+
+
+@media (max-width: 600px) {
+  .nav-container { padding-right: 54px; }
+}
