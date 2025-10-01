@@ -1,4 +1,129 @@
 
+
+// ===== Loading Modal (upgrade) =====
+const LoadingModal = (() => {
+  let el, styleEl, textEl, forceTimer, delayTimer;
+  function ensure() {
+    if (el) return;
+    styleEl = document.createElement('style');
+    styleEl.textContent =
+      `#loading-overlay{position:fixed;inset:0;background:rgba(0,0,0,.42);backdrop-filter:saturate(120%) blur(2px);display:none;align-items:center;justify-content:center;z-index:9999}
+       #loading-overlay.show{display:flex}
+       #loading-overlay .card{min-width:260px;max-width:440px;background:#fff;border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.28);padding:18px 20px;display:flex;gap:12px;align-items:center;font:500 15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111}
+       #loading-overlay .spinner{width:22px;height:22px;border-radius:50%;border:3px solid rgba(0,0,0,.18);border-top-color:#111;animation:lm-spin .9s linear infinite}
+       @keyframes lm-spin{to{transform:rotate(360deg)}}`;
+    document.head.appendChild(styleEl);
+
+    el = document.createElement('div');
+    el.id = 'loading-overlay';
+    el.innerHTML = `<div class="card"><div class="spinner"></div><div class="text">Refreshing…</div></div>`;
+    textEl = el.querySelector('.text');
+    document.body.appendChild(el);
+  }
+  function _forceHideAfter(ms=8000){ clearTimeout(forceTimer); forceTimer = setTimeout(hide, ms); }
+  function show(text) { ensure(); clearTimeout(delayTimer); if (text) textEl.textContent = text; el.classList.add('show'); _forceHideAfter(); }
+  function showWithDelay(text, delay=200){ clearTimeout(delayTimer); delayTimer = setTimeout(() => show(text), delay); }
+  function set(text){ ensure(); textEl.textContent = text || 'Refreshing…'; _forceHideAfter(); }
+  function hide(){ clearTimeout(delayTimer); clearTimeout(forceTimer); if (el) el.classList.remove('show'); }
+  return { show, showWithDelay, set, hide };
+})();
+// ===== End Loading Modal =====
+
+
+// ===== Async utilities =====
+function withTimeout(promise, ms, label='op') {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(`timeout:${label}`)), ms);
+    promise.then(v => { clearTimeout(t); resolve(v); }, e => { clearTimeout(t); reject(e); });
+  });
+}
+async function retry(fn, attempts=2, baseDelay=300) {
+  let last;
+  for (let i = 0; i <= attempts; i++) {
+    try { return await fn(); } catch (e) { last = e; await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i))); }
+  }
+  throw last;
+}
+async function fetchWithTimeout(url, opts={}, ms=7000) {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(new DOMException('Abort','AbortError')), ms);
+  try {
+    return await fetch(url, { cache: 'no-store', ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(id);
+  }
+}
+// ===== End utilities =====
+
+
+// ===== Safe resume refresh (timeouts + retries + escalation) =====
+const ResumeRefresh = (() => {
+  const TIMEOUT = { getSession: 2500, refreshSession: 3000, fetchData: 5000, initUI: 5000 };
+  let inFlight = null;
+  let consecutiveFailures = 0;
+
+  async function _refresh(reason='resume') {
+    LoadingModal.showWithDelay('Refreshing…', 200);
+
+    try {
+      // 1) Wake/refresh auth with timeouts
+      try { await withTimeout(supabase.auth.getSession(), TIMEOUT.getSession, 'getSession'); } catch {}
+      try {
+        let { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          await withTimeout(supabase.auth.refreshSession(), TIMEOUT.refreshSession, 'refreshSession');
+        }
+      } catch {}
+      try { supabase.auth.startAutoRefresh(); } catch {}
+
+      // 2) Refresh data with retries
+      if (typeof fetchGameData === 'function') {
+        await retry(() => withTimeout(fetchGameData(), TIMEOUT.fetchData, 'fetchGameData'), 2, 300);
+      }
+
+      // 3) Re-init UI with a hard cap so it can’t hang forever
+      if (typeof initializeAppForUser === 'function') {
+        await withTimeout(initializeAppForUser(), TIMEOUT.initUI, 'initializeAppForUser');
+      }
+
+      consecutiveFailures = 0; // success!
+    } catch (err) {
+      console.warn('[resume] failed:', err?.message || err);
+      consecutiveFailures++;
+      if (consecutiveFailures >= 2) {
+        location.reload();
+        return;
+      }
+    } finally {
+      LoadingModal.hide();
+      inFlight = null;
+    }
+  }
+
+  function refresh(reason) {
+    if (inFlight) return inFlight;        // single-flight guard
+    inFlight = _refresh(reason);
+    return inFlight;
+  }
+
+  function hook() {
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') refresh('visibility');
+    }, { passive: true });
+
+    window.addEventListener('focus', () => refresh('focus'), { passive: true });
+
+    window.addEventListener('pageshow', (e) => {
+      if (e.persisted) refresh('pageshow');
+    }, { passive: true });
+  }
+
+  return { refresh, hook };
+})();
+ResumeRefresh.hook();
+// ===== End safe resume refresh =====
+
+
 // /* DraftPicksManager stub */
 if (typeof DraftPicksManager === 'undefined') {
   var DraftPicksManager = { save:()=>{}, load:()=>null, applyToState:()=>false, applyToUI:()=>{}, clear:()=>{}, _key:()=>'' };
@@ -45,7 +170,6 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') startAutoRefreshIfNeeded();
 });
 window.addEventListener('focus', startAutoRefreshIfNeeded);
-window.addEventListener('pageshow', (e) => { if (e.persisted) startAutoRefreshIfNeeded(); });
 // ====================================================================
 
 // =================================================================
@@ -108,10 +232,6 @@ document.addEventListener('visibilitychange', () => {
       if (!done && doFull) location.reload();
     });
   }
-});
-
-window.addEventListener('pageshow', (e) => {
-  if (e.persisted) location.reload();
 });
 
 window.addEventListener('focus', () => { __rehydrateAll('focus'); });
@@ -239,6 +359,7 @@ const teamNameToIdMap = new Map([
 // --- NEW: Mappings for displaying stats from the database ---
 const statMappings = {
     'General': {
+        'games_played': 'Games Played',
         'total_penalties': 'Total Penalties',
         'total_penalty_yards': 'Penalty Yards',
         'fumbles': 'Fumbles',
