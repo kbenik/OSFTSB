@@ -2068,13 +2068,10 @@ async function setupGlobalMatchSelector() {
 
     const matchIds = memberships.map(m => m.match_id);
     
-    // --- THIS IS THE FIX ---
-    // The query has been updated to select the new 'buy_in' and 'value_per_point' columns.
     const { data: userMatches, error: matchesError } = await supabase
         .from('matches')
-        .select('id, name, allow_multiple_double_ups, buy_in, value_per_point') // <-- UPDATED LINE
+        .select('id, name, allow_multiple_double_ups, buy_in, value_per_point')
         .in('id', matchIds);
-    // --- END OF FIX ---
 
     if (matchesError || !userMatches || userMatches.length === 0) {
         currentSelectedMatchId = null;
@@ -2085,14 +2082,22 @@ async function setupGlobalMatchSelector() {
         };
 
         if (userMatches.length === 1) {
+            // --- THIS IS THE FIX (PART 1) ---
+            // For a single match, display its name but disable the dropdown.
+            selector.innerHTML = `<option value="${userMatches[0].id}">${userMatches[0].name}</option>`;
+            selector.disabled = true; // Make it non-interactive
+            selectorContainer.classList.remove('hidden'); // CRITICAL: Show the container
             setMatch(userMatches[0].id);
+            // --- END OF FIX ---
         } else {
+            // This is the existing logic for multiple matches, which is correct.
             selector.innerHTML = userMatches.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-            setMatch(selector.value); // Set initial match
+            selector.disabled = false; // Ensure it's interactive
+            setMatch(selector.value);
             selectorContainer.classList.remove('hidden');
 
             selector.addEventListener('change', () => {
-                setMatch(selector.value); // Update on change
+                setMatch(selector.value);
                 const activePageId = document.querySelector('.page.active')?.id;
                 if (activePageId) {
                     showPage(activePageId);
