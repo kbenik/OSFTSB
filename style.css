@@ -1112,3 +1112,23 @@ canvas {
 @media (max-width: 600px) {
   .nav-container { padding-right: 54px; }
 }
+
+#global-match-selector:disabled {
+    /* Make it look like a static label, not a button */
+    background-color: transparent;
+    border: 1px solid transparent;
+    -webkit-appearance: none; /* Removes default dropdown arrow on iOS */
+    -moz-appearance: none;    /* Removes default dropdown arrow on Firefox */
+    appearance: none;         /* Removes default dropdown arrow on modern browsers */
+    opacity: 1;               /* Ensure text is fully visible */
+    text-align: center;       /* Center the match name */
+    pointer-events: none;     /* Prevent any interaction */
+}
+
+/* On mobile, ensure the disabled selector has enough space and aligns well */
+@media (max-width: 600px) {
+  #global-match-selector:disabled {
+      padding-top: 8px; /* Adjust padding for better vertical alignment */
+      padding-bottom: 8px;
+  }
+}
