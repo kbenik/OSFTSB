@@ -498,9 +498,18 @@ function parseTeamInfoCSV(csvText) {
 
 
 
-function getKickoffTimeAsDate(game) {
+// --- THIS IS THE FIX (PART 1): A new, reliable function to get game kickoff times. ---
+// This function prioritizes the full, timezone-aware timestamp from the database.
+// It only falls back to the old, risky string-parsing method if the timestamp is missing.
+function getKickoffAsDate(game) {
+    // Primary method: Use the accurate timestamp directly from the database.
+    if (game && game['kickoff_ts']) {
+        return new Date(game['kickoff_ts']);
+    }
+
+    // Fallback method: The original, less reliable function for data from the CSV.
     if (!game || !game.Date || !game.Time) {
-        return new Date('1970-01-01T00:00:00Z');
+        return new Date('1970-01-01T00:00:00Z'); // Return a date in the past
     }
     try {
         const datePart = game.Date.split(' ')[1];
@@ -512,6 +521,7 @@ function getKickoffTimeAsDate(game) {
         if (modifier && modifier.toUpperCase() === 'PM' && hours < 12) hours += 12;
         if (modifier && modifier.toUpperCase() === 'AM' && hours === 12) hours = 0;
         const monthIndex = parseInt(month, 10) - 1;
+        // This creates a UTC date and manually adjusts for an assumed ET (-4 hours) offset.
         return new Date(Date.UTC(year, monthIndex, day, hours, minutes, 0) + (4 * 60 * 60 * 1000));
     } catch (e) {
         console.error("Failed to parse date for game:", game, e);
@@ -654,6 +664,8 @@ async function fetchGameData() {
             'Game Loser': game.game_loser,
             'Away Logo': game.away_logo,
             'Home Logo': game.home_logo,
+            // --- THIS IS THE FIX (PART 2): Keep the original, unmodified timestamp. ---
+            'kickoff_ts': game.kickoff,
         }));
 
         // Step 3: This part of the logic remains the same. It builds the
@@ -673,7 +685,6 @@ async function fetchGameData() {
         document.querySelector('main.container').innerHTML = "<h1>Could not load game data. Please refresh the page.</h1>";
     }
 }
-
 
 function showPage(pageId) {
     document.querySelectorAll('.page').forEach(page => page.classList.remove('active'));
@@ -775,7 +786,7 @@ async function renderGamesForWeek(week, matchId) {
     gamesContainer.innerHTML = '<p>Loading games...</p>';
     saveButton.style.display = 'block';
     const now = new Date();
-    const weeklyGames = allGames.filter(game => game.Week === week).sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
+    const weeklyGames = allGames.filter(game => game.Week === week).sort((a, b) => getKickoffAsDate(a) - getKickoffAsDate(b));
     if (weeklyGames.length === 0) {
         gamesContainer.innerHTML = `<p class="card">No games found for ${week}.</p>`;
         saveButton.style.display = 'none';
@@ -784,7 +795,8 @@ async function renderGamesForWeek(week, matchId) {
     gamesContainer.innerHTML = '';
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
-        const kickoff = getKickoffTimeAsDate(game);
+        // --- THIS IS THE FIX (PART 3): Use the new, reliable function. ---
+        const kickoff = getKickoffAsDate(game);
         const isLocked = kickoff < now;
         const gameCard = document.createElement('div');
         gameCard.className = `game-card ${isLocked ? 'locked' : ''}`;
@@ -825,7 +837,6 @@ async function renderGamesForWeek(week, matchId) {
     addGameCardEventListeners();
     await loadAndApplyUserPicks(week, matchId);
 }
-
 function updatePicksCounter() {
     const counterElement = document.getElementById('picks-counter');
     if (!counterElement) return;
@@ -1017,7 +1028,8 @@ async function checkAndDisplayPicksReminder() {
         return;
     }
     const firstKickoff = gamesForDefaultWeek
-        .map(getKickoffTimeAsDate)
+        // --- THIS IS THE FIX (PART 3): Use the new, reliable function. ---
+        .map(getKickoffAsDate)
         .sort((a, b) => a - b)[0];
     const tuesdayOfThatWeek = new Date(firstKickoff);
     const dayOfWeek = tuesdayOfThatWeek.getUTCDay();
@@ -1601,7 +1613,7 @@ function getDynamicStyles(points) {
 
 function renderRunSheet(members, allPicks, week) {
     const container = document.getElementById('run-sheet-container');
-    const weeklyGames = allGames.filter(g => g.Week === week).sort((a, b) => getKickoffTimeAsDate(a) - getKickoffTimeAsDate(b));
+    const weeklyGames = allGames.filter(g => g.Week === week).sort((a, b) => getKickoffAsDate(a) - getKickoffAsDate(b));
     const now = new Date();
 
     const sortedMembers = [...members].sort((a, b) => a.profiles.username.localeCompare(b.profiles.username));
@@ -1611,7 +1623,8 @@ function renderRunSheet(members, allPicks, week) {
     sortedMembers.forEach(member => weeklyTotals.set(member.profiles.id, 0));
 
     weeklyGames.forEach(game => {
-        const kickoff = getKickoffTimeAsDate(game);
+        // --- THIS IS THE FIX (PART 3): Use the new, reliable function. ---
+        const kickoff = getKickoffAsDate(game);
         if (kickoff >= now) return; 
 
         const isGameFinal = game.Status === 'post';
@@ -1672,7 +1685,8 @@ function renderRunSheet(members, allPicks, week) {
     tableHtml += '</tr>';
 
     weeklyGames.forEach(game => {
-        const kickoff = getKickoffTimeAsDate(game);
+        // --- THIS IS THE FIX (PART 3): Use the new, reliable function. ---
+        const kickoff = getKickoffAsDate(game);
         const hasKickedOff = kickoff < now;
         const isGameFinal = game.Status === 'post';
         const isInProgress = hasKickedOff && !isGameFinal;
