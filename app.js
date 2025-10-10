@@ -291,10 +291,18 @@ var DraftPicksManager = {
       userPicks = Object.assign({}, userPicks, d.userPicks || {});
       userWagers = Object.assign({}, userWagers, d.userWagers || {});
       if (d.doubleUpPick != null) doubleUpPick = d.doubleUpPick;
-      if (Array.isArray(d.userDoubleUps)) userDoubleUps = new Set(d.userDoubleUps);
+
+      // --- THIS IS THE FIX ---
+      // Instead of overwriting the set, we MERGE the draft picks from
+      // localStorage into the set that was already populated from the database.
+      if (Array.isArray(d.userDoubleUps)) {
+          d.userDoubleUps.forEach(gid => userDoubleUps.add(gid));
+      }
+      
       return true;
     } catch (e) { return false; }
   },
+
   applyToUI() {
     try {
       const container = document.getElementById('games-container');
@@ -870,7 +878,8 @@ async function loadAndApplyUserPicks(week, matchId) {
 
             if (p.is_double_up) {
                 if (currentMatchSettings.allow_multiple_double_ups) {
-                    userDoubleUps.add(gameIdStr); DraftPicksManager.save();
+                    // This is the fix: Add saved double-ups to the main set
+                    userDoubleUps.add(gameIdStr);
                 } else {
                     doubleUpPick = gameIdStr;
                 }
@@ -1907,6 +1916,7 @@ function addGameCardEventListeners() {
         if (card.classList.contains('locked')) return;
         const gameId = card.dataset.gameId;
 
+        // --- THIS SECTION RESTORES THE MISSING FUNCTIONALITY ---
         card.querySelectorAll('.team').forEach(team => {
             team.addEventListener('click', () => {
                 const teamName = team.dataset.teamName;
@@ -1934,6 +1944,8 @@ function addGameCardEventListeners() {
                 btn.classList.add('selected'); DraftPicksManager.save();
             });
         });
+        // --- END OF RESTORED SECTION ---
+
 
         // This logic now correctly routes to single or max-2 mode
         if (currentMatchSettings.allow_multiple_double_ups) {
@@ -1944,16 +1956,15 @@ function addGameCardEventListeners() {
                     
                     const isSelected = e.target.classList.contains('selected');
 
-                    // *** THIS IS THE NEW LOGIC ***
                     // If the user is trying to SELECT a new double up...
                     if (!isSelected) {
-                        // ...check if they have already reached the cap of 2.
+                        // *** THIS IS THE NEW, SIMPLER VALIDATION ***
+                        // The userDoubleUps set now contains both saved and unsaved picks.
                         if (userDoubleUps.size >= 2) {
                             alert("You can only use a maximum of 2 Double Ups per week.");
                             return; // Stop the function here
                         }
                     }
-                    // *** END OF NEW LOGIC ***
 
                     // If the cap is not reached (or if they are deselecting), toggle as normal.
                     e.target.classList.toggle('selected');
@@ -2049,6 +2060,7 @@ async function savePicks() {
 async function setupGlobalMatchSelector() {
     const selectorContainer = document.getElementById('global-selector-container');
     const selector = document.getElementById('global-match-selector');
+    const storageKey = 'lastSelectedMatchId'; // Key for localStorage
     selectorContainer.classList.add('hidden');
     currentSelectedMatchId = null;
     currentMatchSettings = {}; // Reset settings
@@ -2079,20 +2091,32 @@ async function setupGlobalMatchSelector() {
         const setMatch = (matchId) => {
             currentSelectedMatchId = matchId;
             currentMatchSettings = userMatches.find(m => m.id == matchId) || {};
+            // --- THIS IS THE FIX (PART 1): Save the selection ---
+            try {
+                localStorage.setItem(storageKey, matchId);
+            } catch (e) {
+                console.warn("Could not save match selection to localStorage.");
+            }
         };
 
         if (userMatches.length === 1) {
-            // --- THIS IS THE FIX (PART 1) ---
-            // For a single match, display its name but disable the dropdown.
             selector.innerHTML = `<option value="${userMatches[0].id}">${userMatches[0].name}</option>`;
-            selector.disabled = true; // Make it non-interactive
-            selectorContainer.classList.remove('hidden'); // CRITICAL: Show the container
+            selector.disabled = true;
+            selectorContainer.classList.remove('hidden');
             setMatch(userMatches[0].id);
-            // --- END OF FIX ---
         } else {
-            // This is the existing logic for multiple matches, which is correct.
             selector.innerHTML = userMatches.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
-            selector.disabled = false; // Ensure it's interactive
+            selector.disabled = false;
+
+            // --- THIS IS THE FIX (PART 2): Load the last selection ---
+            const lastSelectedId = localStorage.getItem(storageKey);
+            const isValidLastSelection = userMatches.some(m => m.id.toString() === lastSelectedId);
+
+            if (lastSelectedId && isValidLastSelection) {
+                selector.value = lastSelectedId;
+            }
+            // --- END OF FIX ---
+
             setMatch(selector.value);
             selectorContainer.classList.remove('hidden');
 
