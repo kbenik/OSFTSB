@@ -1132,3 +1132,7 @@ canvas {
       padding-bottom: 8px;
   }
 }
+
+.run-sheet-table .game-row:hover .game-matchup-cell {
+    z-index: 10; /* Lifts this cell (and its tooltip) above others in the row on hover */
+}
