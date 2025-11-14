@@ -803,7 +803,6 @@ async function renderGamesForWeek(week, matchId) {
     gamesContainer.innerHTML = '';
     weeklyGames.forEach(game => {
         const gameId = game['Game Id'];
-        // --- THIS IS THE FIX (PART 3): Use the new, reliable function. ---
         const kickoff = getKickoffAsDate(game);
         const isLocked = kickoff < now;
         const gameCard = document.createElement('div');
@@ -812,13 +811,10 @@ async function renderGamesForWeek(week, matchId) {
         const displayTime = kickoff.toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
         const oddsText = game.Odds ? ` | <span class="odds-info">${game.Odds}</span>` : '';
 
-        // *** CONDITIONAL LOGIC FOR DOUBLE UP BUTTON ***
         let doubleUpButtonHtml = '';
         if (currentMatchSettings.allow_multiple_double_ups) {
-            // New Mode: A button for every game
             doubleUpButtonHtml = `<button class="double-up-btn individual-double-up">2x Double Up</button>`;
         } else {
-            // Old Mode: A single, shared button
             doubleUpButtonHtml = `<button class="double-up-btn shared-double-up">2x Double Up</button>`;
         }
 
@@ -842,9 +838,11 @@ async function renderGamesForWeek(week, matchId) {
             </div>`;
         gamesContainer.appendChild(gameCard);
     });
-    addGameCardEventListeners();
-    await loadAndApplyUserPicks(week, matchId);
+    
+    // We call loadAndApplyUserPicks which will IN TURN call addGameCardEventListeners
+    await loadAndApplyUserPicks(week, matchId); 
 }
+
 function updatePicksCounter() {
     const counterElement = document.getElementById('picks-counter');
     if (!counterElement) return;
@@ -854,7 +852,12 @@ function updatePicksCounter() {
     counterElement.textContent = `Picks: ${validPicksCount}`;
 }
 
+// app.js
+
 async function loadAndApplyUserPicks(week, matchId) {
+    // ADD THIS NEW VARIABLE AT THE TOP OF THE FUNCTION
+    let winningDoubleUpCount = 0; 
+
     try {
         const { data: savedPicks, error } = await supabase
             .from('picks')
@@ -866,8 +869,8 @@ async function loadAndApplyUserPicks(week, matchId) {
         if (error) throw error;
         userPicks = {};
         userWagers = {};
-        doubleUpPick = null; DraftPicksManager.save();
-        userDoubleUps.clear(); // Clear the set for the new week
+        doubleUpPick = null;
+        userDoubleUps.clear(); 
         initiallySavedPicks.clear();
 
         savedPicks.forEach(p => {
@@ -877,8 +880,12 @@ async function loadAndApplyUserPicks(week, matchId) {
             userWagers[p.game_id] = p.wager;
 
             if (p.is_double_up) {
+                // INCREMENT OUR NEW COUNTER IF A DOUBLE-UP WAS CORRECT
+                if (p.is_correct === true) {
+                    winningDoubleUpCount++;
+                }
+
                 if (currentMatchSettings.allow_multiple_double_ups) {
-                    // This is the fix: Add saved double-ups to the main set
                     userDoubleUps.add(gameIdStr);
                 } else {
                     doubleUpPick = gameIdStr;
@@ -895,10 +902,15 @@ async function loadAndApplyUserPicks(week, matchId) {
             }
         });
         updatePicksCounter();
-        // Overlay any locally drafted (unsaved) picks
         if (DraftPicksManager.applyToState()) { DraftPicksManager.applyToUI(); }
+
+        // PASS THE COUNT TO THE EVENT LISTENER SETUP
+        addGameCardEventListeners(winningDoubleUpCount); 
+
     } catch (err) {
         console.error("Non-critical error fetching user picks:", err.message);
+        // Ensure event listeners are still set up even if the fetch fails
+        addGameCardEventListeners(0);
     }
 }
 
@@ -1909,23 +1921,23 @@ async function handleProfileUpdate(e) {
     }
 }
 
-function addGameCardEventListeners() {
-    const allSharedDoubleUpBtns = document.querySelectorAll('.shared-double-up');
 
+function addGameCardEventListeners(winningDoubleUpCount = 0) { // Add the parameter with a default value
+    const allSharedDoubleUpBtns = document.querySelectorAll('.shared-double-up');
+    
     document.querySelectorAll('.game-card').forEach(card => {
         if (card.classList.contains('locked')) return;
         const gameId = card.dataset.gameId;
 
-        // --- THIS SECTION RESTORES THE MISSING FUNCTIONALITY ---
+        // --- Team and Wager listeners remain the same ---
         card.querySelectorAll('.team').forEach(team => {
             team.addEventListener('click', () => {
                 const teamName = team.dataset.teamName;
                 if (userPicks[gameId] === teamName) {
                     userPicks[gameId] = undefined;
                     userWagers[gameId] = undefined;
-                    // Also remove double up if team is deselected
-                    if (doubleUpPick === gameId) doubleUpPick = null; DraftPicksManager.save();
-                    userDoubleUps.delete(gameId); DraftPicksManager.save();
+                    if (doubleUpPick === gameId) doubleUpPick = null;
+                    userDoubleUps.delete(gameId);
                     card.querySelectorAll('.selected').forEach(el => el.classList.remove('selected'));
                 } else {
                     userPicks[gameId] = teamName;
@@ -1941,13 +1953,11 @@ function addGameCardEventListeners() {
                 if (!userPicks[gameId]) return alert("Please select a team before placing a wager.");
                 userWagers[gameId] = parseInt(btn.dataset.value, 10);
                 card.querySelectorAll('.wager-btn').forEach(b => b.classList.remove('selected'));
-                btn.classList.add('selected'); DraftPicksManager.save();
+                btn.classList.add('selected');
             });
         });
-        // --- END OF RESTORED SECTION ---
-
-
-        // This logic now correctly routes to single or max-2 mode
+        
+        // --- THIS IS THE NEW DOUBLE-UP LOGIC ---
         if (currentMatchSettings.allow_multiple_double_ups) {
             const individualBtn = card.querySelector('.individual-double-up');
             if (individualBtn) {
@@ -1955,39 +1965,55 @@ function addGameCardEventListeners() {
                     if (!userPicks[gameId]) return alert("Please select a team before using Double Up.");
                     
                     const isSelected = e.target.classList.contains('selected');
+                    
+                    // Use the new DB column, or fall back to 2 if it doesn't exist.
+                    const maxWins = currentMatchSettings.double_up_win_limit || 2; 
 
                     // If the user is trying to SELECT a new double up...
                     if (!isSelected) {
-                        // *** THIS IS THE NEW, SIMPLER VALIDATION ***
-                        // The userDoubleUps set now contains both saved and unsaved picks.
-                        if (userDoubleUps.size >= 2) {
-                            alert("You can only use a maximum of 2 Double Ups per week.");
+                        // ** THE NEW VALIDATION **
+                        // Check if the number of already WON double-ups is at the limit.
+                        if (winningDoubleUpCount >= maxWins) {
+                            alert(`You have already won the maximum of ${maxWins} Double Ups this week and cannot select more.`);
                             return; // Stop the function here
                         }
                     }
 
-                    // If the cap is not reached (or if they are deselecting), toggle as normal.
+                    // If the win cap is not reached, toggle as normal.
                     e.target.classList.toggle('selected');
                     if (e.target.classList.contains('selected')) {
-                        userDoubleUps.add(gameId); DraftPicksManager.save();
+                        userDoubleUps.add(gameId);
                     } else {
-                        userDoubleUps.delete(gameId); DraftPicksManager.save();
+                        userDoubleUps.delete(gameId);
                     }
                 });
             }
         } else {
-            // This is the original logic for single-double-up mode, which is unchanged.
+            // Updated logic for single double-up mode
             const sharedBtn = card.querySelector('.shared-double-up');
             if(sharedBtn) {
                 sharedBtn.addEventListener('click', (e) => {
                     if (!userPicks[gameId]) return alert("Please select a team before using your Double Up.");
+
                     const wasSelected = e.target.classList.contains('selected');
+                    const maxWins = 1; // In single mode, the max is always 1
+
+                    // If they are trying to select a new Double Up...
+                    if (!wasSelected) {
+                        // ** THE NEW VALIDATION **
+                        if (winningDoubleUpCount >= maxWins) {
+                            alert("You have already won your Double Up for the week and cannot select another.");
+                            return; // Stop execution
+                        }
+                    }
+
+                    // Toggle as normal
                     allSharedDoubleUpBtns.forEach(b => b.classList.remove('selected'));
                     if (!wasSelected) {
                         e.target.classList.add('selected');
-                        doubleUpPick = gameId; DraftPicksManager.save();
+                        doubleUpPick = gameId;
                     } else {
-                        doubleUpPick = null; DraftPicksManager.save();
+                        doubleUpPick = null;
                     }
                 });
             }
