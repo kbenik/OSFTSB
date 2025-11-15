@@ -1136,3 +1136,128 @@ canvas {
 .run-sheet-table .game-row:hover .game-matchup-cell {
     z-index: 10; /* Lifts this cell (and its tooltip) above others in the row on hover */
 }
+
+.stats-view-container {
+    display: flex;
+    gap: 20px;
+    padding: 10px 0;
+}
+
+.stats-column {
+    flex: 1;
+    min-width: 0;
+}
+
+.stats-column h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #eee;
+    font-size: 1.1rem;
+}
+
+.stats-column.best-picks h4 {
+    color: #2e7d32; /* Green */
+}
+
+.stats-column.worst-picks h4 {
+    color: #c62828; /* Red */
+}
+
+.stats-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.stats-list-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 5px;
+}
+
+.stats-list-item:not(:last-child) {
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.stats-team-logo {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.stats-team-info {
+    flex-grow: 1;
+    min-width: 0;
+}
+
+.stats-team-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.stats-pick-count {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.stats-net-points {
+    font-weight: bold;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+    width: 50px;
+    text-align: right;
+}
+
+.points-positive {
+    color: #2e7d32;
+}
+
+.points-negative {
+    color: #c62828;
+}
+
+/* Responsive styles for the new view */
+@media (max-width: 600px) {
+    .stats-view-container {
+        flex-direction: column;
+    }
+}
+
+@media (max-width: 600px) {
+    /* ... (your other mobile styles are here) ... */
+.stats-view-container {
+        flex-direction: row; /* Change from column to row */
+        gap: 20px;           /* Adjust the gap for a side-by-side layout */
+    }
+    /* --- END OF FIX --- */
+
+    /* The rest of your mobile styles for this view remain the same */
+    .stats-team-name {
+        display: none;
+    }
+
+    .stats-list-item {
+        justify-content: space-between;
+        gap: 10px;
+    }
+    
+
+    .stats-team-info {
+        flex-grow: 0; /* Stop this element from growing */
+        text-align: center;
+    }
+
+    .stats-pick-count {
+        font-size: 0.9rem; /* Make the pick count slightly larger on mobile */
+    }
+    
+    .stats-column h4 {
+        text-align: center; /* Center the "Top Picks" and "Shit Picks" titles */
+    }
+    /* --- END OF FIX --- */
+}
