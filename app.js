@@ -2106,9 +2106,10 @@ async function setupGlobalMatchSelector() {
 
     const matchIds = memberships.map(m => m.match_id);
     
+    // Fetch the new double_up_win_limit column along with the other match data
     const { data: userMatches, error: matchesError } = await supabase
         .from('matches')
-        .select('id, name, allow_multiple_double_ups, buy_in, value_per_point')
+        .select('id, name, allow_multiple_double_ups, buy_in, value_per_point, double_up_win_limit')
         .in('id', matchIds);
 
     if (matchesError || !userMatches || userMatches.length === 0) {
@@ -2117,7 +2118,6 @@ async function setupGlobalMatchSelector() {
         const setMatch = (matchId) => {
             currentSelectedMatchId = matchId;
             currentMatchSettings = userMatches.find(m => m.id == matchId) || {};
-            // --- THIS IS THE FIX (PART 1): Save the selection ---
             try {
                 localStorage.setItem(storageKey, matchId);
             } catch (e) {
@@ -2134,19 +2134,26 @@ async function setupGlobalMatchSelector() {
             selector.innerHTML = userMatches.map(m => `<option value="${m.id}">${m.name}</option>`).join('');
             selector.disabled = false;
 
-            // --- THIS IS THE FIX (PART 2): Load the last selection ---
             const lastSelectedId = localStorage.getItem(storageKey);
             const isValidLastSelection = userMatches.some(m => m.id.toString() === lastSelectedId);
 
             if (lastSelectedId && isValidLastSelection) {
                 selector.value = lastSelectedId;
             }
-            // --- END OF FIX ---
 
             setMatch(selector.value);
             selectorContainer.classList.remove('hidden');
 
             selector.addEventListener('change', () => {
+                // --- THIS IS THE FIX ---
+                // Immediately clear all in-memory pick and wager state.
+                // This prevents the state from one match from leaking into the next.
+                userPicks = {};
+                userWagers = {};
+                doubleUpPick = null;
+                userDoubleUps.clear();
+                // --- END OF FIX ---
+
                 setMatch(selector.value);
                 const activePageId = document.querySelector('.page.active')?.id;
                 if (activePageId) {
